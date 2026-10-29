@@ -88,24 +88,65 @@ jobs:
       - name: Ensure submodules (OpenSSL / litehook / fishhook)
         run: |
           set -euo pipefail
-          git submodule sync --recursive
-          git submodule update --init --recursive --force
-          echo "==> Submodule status:"
-          git submodule status --recursive || true
-          if [ ! -d OpenSSL/Frameworks/OpenSSL.xcframework ]; then
-            echo "OpenSSL.xcframework missing after submodule update — cloning krzyzanowskim/OpenSSL"
-            rm -rf OpenSSL
-            git clone --depth 1 https://github.com/krzyzanowskim/OpenSSL.git OpenSSL
-          fi
-          if [ ! -d OpenSSL/Frameworks/OpenSSL.xcframework ]; then
-            echo "ERROR: OpenSSL/Frameworks/OpenSSL.xcframework still missing"
-            ls -la OpenSSL || true
-            ls -la OpenSSL/Frameworks || true
+
+          git submodule sync --recursive || true
+          git submodule update --init --recursive --force || true
+
+          OPENSSL_TAG="3.6.5000"
+          echo "Installing OpenSSL ${OPENSSL_TAG}..."
+          rm -rf OpenSSL
+          mkdir -p OpenSSL/Frameworks
+          curl -fsSL -o /tmp/OpenSSL.xcframework.zip \
+            "https://github.com/krzyzanowskim/OpenSSL/releases/download/${OPENSSL_TAG}/OpenSSL.xcframework.zip"
+          unzip -qo /tmp/OpenSSL.xcframework.zip -d /tmp/openssl_extract
+          rm -f /tmp/OpenSSL.xcframework.zip
+          FOUND=$(find /tmp/openssl_extract -type d -name OpenSSL.xcframework | head -1)
+          if [ -z "$FOUND" ]; then
+            echo "ERROR: OpenSSL.xcframework not found in zip"
+            find /tmp/openssl_extract | head -50
             exit 1
           fi
-          echo "OpenSSL.xcframework OK"
-          ls -la OpenSSL/Frameworks/OpenSSL.xcframework | head
+          mv "$FOUND" OpenSSL/Frameworks/OpenSSL.xcframework
+          rm -rf /tmp/openssl_extract
 
+          # Strip vendor signatures so ProcessXCFramework cannot fail on signature mismatch
+          find OpenSSL/Frameworks/OpenSSL.xcframework -type d -name '_CodeSignature' -print -exec rm -rf {} + 2>/dev/null || true
+          find OpenSSL/Frameworks/OpenSSL.xcframework -name '*.signature' -delete 2>/dev/null || true
+
+          if [ ! -d OpenSSL/Frameworks/OpenSSL.xcframework/ios-arm64 ]; then
+            echo "ERROR: ios-arm64 slice missing"
+            ls -la OpenSSL/Frameworks/OpenSSL.xcframework
+            exit 1
+          fi
+          echo "OpenSSL.xcframework ready:"
+          ls OpenSSL/Frameworks/OpenSSL.xcframework
+
+          python3 - <<'PY2'
+          from pathlib import Path
+          import re
+          p = Path("LiveContainer.xcodeproj/project.pbxproj")
+          t = p.read_text()
+          t2 = re.sub(r'expectedSignature = "[^"]*";\s*', '', t)
+          t2 = t2.replace('OpenSSL/Frameworks/iphoneos/OpenSSL.framework', 'OpenSSL/Frameworks/OpenSSL.xcframework')
+          t2 = t2.replace('$(PROJECT_DIR)/OpenSSL/Frameworks/iphoneos', '$(PROJECT_DIR)/OpenSSL/Frameworks')
+          if t2 != t:
+              p.write_text(t2)
+              print("pbxproj patched (signature + search paths)")
+          else:
+              print("pbxproj unchanged")
+          PY2
+
+          if [ ! -f litehook/litehook.c ] && [ ! -f litehook/README.md ]; then
+            rm -rf litehook
+            git clone --depth 1 https://github.com/LiveContainer/litehook.git litehook
+          fi
+          if [ ! -f fishhook/fishhook.c ] && [ ! -d fishhook/fishhook.xcodeproj ]; then
+            rm -rf fishhook
+            git clone --depth 1 https://github.com/LiveContainer/fishhook.git fishhook || true
+          fi
+
+      - name: Resolve version
+      - name: Resolve version
       - name: Resolve version (semver)
         id: version
         run: |
@@ -174,11 +215,13 @@ jobs:
             rm -rf "${archive_path}.xcarchive" Payload tmp
 
             set +e
+            set +e
             xcodebuild archive \
               -archivePath "$archive_path" \
               -scheme "$scheme" \
               -${{ steps.proj.outputs.filetype }} "${{ steps.proj.outputs.file }}" \
               -sdk iphoneos \
+              -destination "generic/platform=iOS" \
               -arch arm64 \
               -configuration Release \
               MARKETING_VERSION="${{ steps.version.outputs.version }}" \
@@ -189,7 +232,17 @@ jobs:
               CODE_SIGNING_ALLOWED=YES \
               DEVELOPMENT_TEAM= \
               PROVISIONING_PROFILE_SPECIFIER= \
-              | xcpretty
+              ONLY_ACTIVE_ARCH=NO \
+              > /tmp/xcodebuild_archive.log 2>&1
+            XC_RC=$?
+            set -e
+            grep -E "error:|ProcessXCFramework|fatal|ARCHIVE FAILED|failed" /tmp/xcodebuild_archive.log | tail -80 || true
+            if [ "$XC_RC" -ne 0 ]; then
+              echo "---- last 120 lines of xcodebuild log ----"
+              tail -120 /tmp/xcodebuild_archive.log
+              exit "$XC_RC"
+            fi
+            echo "Archive OK"
             ARCHIVE_RC=${PIPESTATUS[0]}
             set -e
 
