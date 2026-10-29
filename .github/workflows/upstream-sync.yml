@@ -1,0 +1,168 @@
+name: Upstream Sync
+
+# Tracks LiveContainer + SideStore WITHOUT recommending a downgrade merge.
+# Extended was built on nightly-era sources — stable "latest" can be OLDER than our tree.
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      open_issue:
+        description: Open/update GitHub Issue with upstream snapshot
+        type: boolean
+        default: true
+
+jobs:
+  check:
+    name: Check upstream (no downgrade)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Add upstream remote & fetch
+        run: |
+          set -euo pipefail
+          git remote remove upstream 2>/dev/null || true
+          git remote add upstream https://github.com/LiveContainer/LiveContainer.git
+          git fetch upstream --tags --force
+          git fetch upstream main:refs/remotes/upstream/main || git fetch upstream master:refs/remotes/upstream/main || true
+
+      - name: Snapshot versions
+        id: snap
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          LOCAL_VER=$(tr -d '[:space:]' < VERSION 2>/dev/null || echo "4.1.8")
+          OUR_HEAD=$(git rev-parse HEAD)
+          OUR_DATE=$(git log -1 --format=%ci HEAD)
+
+          UP_MAIN_SHA=$(git rev-parse upstream/main 2>/dev/null || echo "")
+          UP_MAIN_DATE=$(git log -1 --format=%ci upstream/main 2>/dev/null || echo "")
+
+          # Recorded base from UPSTREAM_BASE.md if present
+          RECORDED_SHA=$(grep -E '^UPSTREAM_SHA=' UPSTREAM_BASE.md 2>/dev/null | tail -1 | cut -d= -f2- | tr -d '`' | tr -d ' ' || echo "unknown")
+          if [ -z "$RECORDED_SHA" ]; then RECORDED_SHA=unknown; fi
+
+          LC_STABLE=$(gh api repos/LiveContainer/LiveContainer/releases/latest --jq '.tag_name // empty' || true)
+          LC_STABLE_DATE=$(gh api repos/LiveContainer/LiveContainer/releases/latest --jq '.published_at // empty' || true)
+          LC_NIGHTLY_DATE=$(gh api repos/LiveContainer/LiveContainer/releases/tags/nightly --jq '.published_at // .created_at // empty' || true)
+
+          SS_LC_NIGHTLY=$(gh api repos/LiveContainer/SideStore/releases/tags/nightly --jq '.published_at // .created_at // empty' || true)
+          SS_OFFICIAL=$(gh api repos/SideStore/SideStore/releases/latest --jq '.tag_name // empty' || true)
+          SS_OFFICIAL_DATE=$(gh api repos/SideStore/SideStore/releases/latest --jq '.published_at // empty' || true)
+
+          # Is upstream/main an ancestor of HEAD? (we already contain it)
+          CONTAINS="unknown"
+          AHEAD_BEHIND="n/a"
+          if [ -n "$UP_MAIN_SHA" ]; then
+            if git merge-base --is-ancestor "$UP_MAIN_SHA" HEAD 2>/dev/null; then
+              CONTAINS="yes_we_include_upstream_main"
+            else
+              CONTAINS="no_upstream_has_commits_we_lack"
+            fi
+            AHEAD_BEHIND=$(git rev-list --left-right --count HEAD...upstream/main 2>/dev/null || echo "n/a")
+          fi
+
+          # Downgrade risk: stable release date older than upstream/main tip we care about
+          RISK="ok"
+          if [ "$CONTAINS" = "yes_we_include_upstream_main" ]; then
+            RISK="no_lc_code_merge_needed"
+          elif [ "$CONTAINS" = "no_upstream_has_commits_we_lack" ]; then
+            RISK="merge_upstream_main_forward_only"
+          fi
+
+          {
+            echo "LOCAL_VER=$LOCAL_VER"
+            echo "OUR_HEAD=$OUR_HEAD"
+            echo "OUR_DATE=$OUR_DATE"
+            echo "UP_MAIN_SHA=$UP_MAIN_SHA"
+            echo "UP_MAIN_DATE=$UP_MAIN_DATE"
+            echo "RECORDED_SHA=$RECORDED_SHA"
+            echo "LC_STABLE=$LC_STABLE"
+            echo "LC_STABLE_DATE=$LC_STABLE_DATE"
+            echo "LC_NIGHTLY_DATE=$LC_NIGHTLY_DATE"
+            echo "SS_LC_NIGHTLY=$SS_LC_NIGHTLY"
+            echo "SS_OFFICIAL=$SS_OFFICIAL"
+            echo "SS_OFFICIAL_DATE=$SS_OFFICIAL_DATE"
+            echo "CONTAINS=$CONTAINS"
+            echo "AHEAD_BEHIND=$AHEAD_BEHIND"
+            echo "RISK=$RISK"
+          } >> "$GITHUB_ENV"
+
+          echo "Contains upstream/main? $CONTAINS"
+          echo "Ahead/behind (ours...upstream): $AHEAD_BEHIND"
+          echo "Risk: $RISK"
+
+      - name: Issue report
+        if: ${{ github.event_name == 'schedule' || inputs.open_issue == true || inputs.open_issue == 'true' }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TITLE="Upstream check — LC main ${UP_MAIN_SHA:0:7} · SS ${SS_OFFICIAL:-?} · risk=${RISK}"
+
+          EXISTING=$(gh issue list --state open --search "Upstream check" --json number --jq '.[0].number // empty' || true)
+
+          BODY=$(cat <<EOF
+          ## Upstream status (anti-downgrade)
+
+          Extended started from a **nightly-era** tree. Merging **stable-only** or an **older tip** can move the repo **backwards**.
+
+          ### LiveContainer
+
+          | Item | Value |
+          |------|--------|
+          | Extended VERSION | \`${LOCAL_VER}\` |
+          | Our HEAD | \`${OUR_HEAD}\` (${OUR_DATE}) |
+          | Recorded UPSTREAM_SHA | \`${RECORDED_SHA}\` |
+          | **upstream/main SHA** | \`${UP_MAIN_SHA}\` (${UP_MAIN_DATE}) |
+          | We already contain upstream/main? | **${CONTAINS}** |
+          | Ahead/behind \`HEAD...upstream/main\` | \`${AHEAD_BEHIND}\` (ours_only / upstream_only) |
+          | GitHub **stable** latest tag | \`${LC_STABLE:-n/a}\` (${LC_STABLE_DATE:-}) |
+          | Nightly release stamp | \`${LC_NIGHTLY_DATE:-n/a}\` |
+          | **Merge recommendation** | **${RISK}** |
+
+          ### SideStore (independent of LC git merge)
+
+          | Item | Value |
+          |------|--------|
+          | LiveContainer/SideStore nightly | \`${SS_LC_NIGHTLY:-n/a}\` |
+          | SideStore/SideStore official | \`${SS_OFFICIAL:-n/a}\` (${SS_OFFICIAL_DATE:-}) |
+
+          SideStore hotfixes → **rebuild IPA only** (\`build_github.sh\` downloads fresh SideStore.ipa). No need to merge LC.
+
+          ---
+
+          ### Safe rules (read before merge)
+
+          1. **Only merge forward** onto \`upstream/main\` (or newer SHA).  
+             Never merge a tag whose commit is an **ancestor** you already passed.
+          2. If \`CONTAINS=yes_we_include_upstream_main\` → **skip LC merge**; only rebuild if SideStore moved.
+          3. If \`no_upstream_has_commits_we_lack\` →  
+             \`\`\`bash
+             git fetch upstream
+             git merge upstream/main   # resolve Extended file conflicts
+             # then update UPSTREAM_BASE.md UPSTREAM_SHA=
+             git rev-parse upstream/main
+             \`\`\`
+          4. **Do not** \`git reset --hard\` to stable \`releases/latest\` — stable can lag nightly.
+          5. After merge: push \`main\` → Build workflow → full SemVer **Release** + IPA.
+
+          Auto-merge remains **off** so Extended patches are not dropped on conflict.
+          EOF
+          )
+
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "$BODY" || true
+            gh issue edit "$EXISTING" --title "$TITLE" || true
+          else
+            gh issue create --title "$TITLE" --body "$BODY" || true
+          fi

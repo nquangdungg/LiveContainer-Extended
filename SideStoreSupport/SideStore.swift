@@ -8,6 +8,7 @@
 import Foundation
 import AppIntents
 import UserNotifications
+import Darwin
 
 @available(iOS 17.0, *)
 func performIntentRefresh(identifier: String, mangledTypeName: String, intentProgress: Progress) async throws {
@@ -17,6 +18,41 @@ func performIntentRefresh(identifier: String, mangledTypeName: String, intentPro
     } else {
         RefreshHandler.shared.progress = intentProgress
         try await RefreshHandler.shared.startRefresh(identifier: identifier, mangledName: mangledTypeName)
+    }
+}
+
+/// Same path as the system “Refresh All Apps” Shortcut / App Intent.
+@available(iOS 17.0, *)
+public func refreshAllAppsFromUI(progress: Progress = Progress()) async throws {
+    try await performIntentRefresh(
+        identifier: "RefreshAllIntent",
+        mangledTypeName: "9SideStore20RefreshAllAppsIntentV",
+        intentProgress: progress
+    )
+}
+
+/// Cross-module bridge so LiveContainerSwiftUI can trigger refresh without a hard link.
+@objc(LCRefreshAllAppsBridge)
+public class LCRefreshAllAppsBridge: NSObject {
+    /// Selector: `refreshWithCompletion:`
+    @objc public static func refresh(completion: (@convention(block) (NSError?) -> Void)?) {
+        if #available(iOS 17.0, *) {
+            Task {
+                do {
+                    try await refreshAllAppsFromUI()
+                    await MainActor.run { completion?(nil) }
+                } catch {
+                    let nsError = error as NSError
+                    await MainActor.run { completion?(nsError) }
+                }
+            }
+        } else {
+            completion?(NSError(
+                domain: "SideStore",
+                code: 17,
+                userInfo: [NSLocalizedDescriptionKey: "Refresh All Apps requires iOS 17 or later."]
+            ))
+        }
     }
 }
 
@@ -143,11 +179,16 @@ class RefreshHandler: NSObject, RefreshServer {
             
             try await withUnsafeThrowingContinuation { c in
                 self.launchContinuation = c
-                DispatchQueue.main.asyncAfter(deadline: .now() + 300) {
-                    if let c = self.launchContinuation {
-                        c.resume(throwing: NSError(domain: "SideStore", code: 1, userInfo: [NSLocalizedDescriptionKey: "Built-in SideStore failed to start in reasonable time"]))
+                // Capture process id only — NSExtension is not Sendable; avoid capturing it in the @Sendable timer closure.
+                let pidToKill = ext.pid(forRequestIdentifier: uuid)
+                DispatchQueue.main.asyncAfter(deadline: .now() + 300) { [weak self] in
+                    guard let self else { return }
+                    if let cont = self.launchContinuation {
+                        cont.resume(throwing: NSError(domain: "SideStore", code: 1, userInfo: [NSLocalizedDescriptionKey: "Built-in SideStore failed to start in reasonable time"]))
                         self.launchContinuation = nil
-                        ext._kill(9)
+                        if pidToKill > 0 {
+                            kill(pidToKill, SIGKILL)
+                        }
                     }
                 }
             }

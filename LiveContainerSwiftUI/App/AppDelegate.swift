@@ -53,7 +53,9 @@ class SceneDelegate: NSObject, UIWindowSceneDelegate, ObservableObject { // Make
     var window: UIWindow?
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
-        self.window = (scene as? UIWindowScene)?.keyWindow
+        if let windowScene = scene as? UIWindowScene {
+            self.window = windowScene.windows.first(where: { $0.isKeyWindow }) ?? windowScene.windows.first
+        }
     }
     
 }
@@ -71,7 +73,12 @@ class SceneDelegate: NSObject, UIWindowSceneDelegate, ObservableObject { // Make
         if newOptions == nil {
             newOptions = UIScene.ActivationRequestOptions()
         }
-        newOptions!._setRequestFullscreen(UIScreen.main.bounds == self.keyWindow!.bounds)
+        let keyBounds = self.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+            .first(where: { $0.isKeyWindow })?
+            .bounds ?? .zero
+        newOptions!._setRequestFullscreen(UIScreen.main.bounds == keyBounds)
         self.hook_requestSceneSessionActivation(sceneSession, userActivity: userActivity, options: newOptions, errorHandler: errorHandler)
     }
     

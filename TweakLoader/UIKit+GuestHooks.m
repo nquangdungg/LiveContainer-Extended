@@ -777,3 +777,118 @@ static LCControlAppURLHandling LCHandleControlAppURL(NSURL *url, NSString** modi
     }
 }
 @end
+
+// =============================================================================
+// LiveContainer Extended: Double-tap near clock → return to LiveContainer
+// =============================================================================
+
+@interface UIStatusBarManager (LCGuestDoubleTap)
+- (void)handleTapAction:(UIAction *)action;
+- (void)lc_handleTapAction:(UIAction *)action;
+@end
+
+@implementation UIStatusBarManager (LCGuestDoubleTap)
+
+static NSTimeInterval LCGuestPendingTapTime = 0;
+static dispatch_block_t LCGuestPendingSingleTapBlock = nil;
+static const NSTimeInterval kLCGuestDoubleTapWindow = 0.40;
+
+static BOOL LCGuestTapIsOnClockSide(UIAction *action) {
+    id sender = nil;
+    if ([action respondsToSelector:@selector(sender)]) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+        sender = [action performSelector:@selector(sender)];
+#pragma clang diagnostic pop
+    }
+    if (![sender isKindOfClass:[UIView class]]) {
+        return YES;
+    }
+    UIView *view = (UIView *)sender;
+    CGRect frame = [view convertRect:view.bounds toView:nil];
+    CGFloat midX = CGRectGetMidX(frame);
+    CGFloat width = CGRectGetWidth(UIScreen.mainScreen.bounds);
+    if (width < 1) return YES;
+    BOOL rtl = NO;
+    if (@available(iOS 13.0, *)) {
+        rtl = (view.effectiveUserInterfaceLayoutDirection == UIUserInterfaceLayoutDirectionRightToLeft);
+    }
+    if (rtl) return midX >= width * 0.52;
+    return midX <= width * 0.48;
+}
+
+- (void)lc_handleTapAction:(UIAction *)action {
+    BOOL enabled = YES;
+    Class sharedUtils = NSClassFromString(@"LCSharedUtils");
+    NSString *groupId = nil;
+    if ([sharedUtils respondsToSelector:@selector(appGroupID)]) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+        groupId = [sharedUtils performSelector:@selector(appGroupID)];
+#pragma clang diagnostic pop
+    }
+    NSUserDefaults *defs = groupId
+        ? [[NSUserDefaults alloc] initWithSuiteName:groupId]
+        : [NSUserDefaults standardUserDefaults];
+    if ([defs objectForKey:@"LCDoubleTapStatusBarToExit"] != nil) {
+        enabled = [defs boolForKey:@"LCDoubleTapStatusBarToExit"];
+    }
+
+    if (!enabled || !LCGuestTapIsOnClockSide(action)) {
+        [self lc_handleTapAction:action];
+        return;
+    }
+
+    NSTimeInterval now = CFAbsoluteTimeGetCurrent();
+    if (LCGuestPendingSingleTapBlock != nil &&
+        LCGuestPendingTapTime > 0 &&
+        (now - LCGuestPendingTapTime) <= kLCGuestDoubleTapWindow) {
+        dispatch_block_cancel(LCGuestPendingSingleTapBlock);
+        LCGuestPendingSingleTapBlock = nil;
+        LCGuestPendingTapTime = 0;
+
+        UIImpactFeedbackGenerator *gen =
+            [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleMedium];
+        [gen prepare];
+        [gen impactOccurred];
+
+        if ([sharedUtils respondsToSelector:@selector(launchToGuestAppWithClassicMode:)]) {
+            [sharedUtils launchToGuestAppWithClassicMode:0];
+        }
+        return;
+    }
+
+    if (LCGuestPendingSingleTapBlock) {
+        dispatch_block_cancel(LCGuestPendingSingleTapBlock);
+        LCGuestPendingSingleTapBlock = nil;
+    }
+    LCGuestPendingTapTime = now;
+    __weak typeof(self) weakSelf = self;
+    UIAction *captured = action;
+    LCGuestPendingSingleTapBlock = dispatch_block_create(0, ^{
+        LCGuestPendingSingleTapBlock = nil;
+        LCGuestPendingTapTime = 0;
+        [weakSelf lc_handleTapAction:captured];
+    });
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kLCGuestDoubleTapWindow * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(),
+                   LCGuestPendingSingleTapBlock);
+}
+
+@end
+
+__attribute__((constructor))
+static void LCGuestDoubleTapStatusBarInit(void) {
+    if (!NSUserDefaults.lcGuestAppId) return;
+
+    if (@available(iOS 15.0, *)) {
+        Class cls = NSClassFromString(@"UIStatusBarManager");
+        if (!cls) return;
+        SEL orig = @selector(handleTapAction:);
+        SEL hook = @selector(lc_handleTapAction:);
+        if (class_getInstanceMethod(cls, orig) && class_getInstanceMethod(cls, hook)) {
+            swizzle(cls, orig, hook);
+        }
+    }
+}
+

@@ -14,6 +14,10 @@ struct LCTabView: View {
     @State var errorInfo = ""
     
     @EnvironmentObject var sharedModel : SharedModel
+    @ObservedObject private var theme = LCTheme.shared
+    @ObservedObject private var developerMode = LCDeveloperMode.shared
+    @ObservedObject private var appearanceEffects = LCAppearanceEffects.shared
+    @ObservedObject private var appLock = LCAppLockManager.shared
     @EnvironmentObject var sceneDelegate: SceneDelegate
     @State var shouldToggleMainWindowOpen = false
     @Environment(\.scenePhase) var scenePhase
@@ -22,6 +26,7 @@ struct LCTabView: View {
     let pub = NotificationCenter.default.publisher(for: UIScene.didDisconnectNotification)
     
     var body: some View {
+        ZStack {
         TabView(selection: $sharedModel.selectedTab) {
             if DataManager.shared.model.multiLCStatus != 2 {
                 LCSourcesView()
@@ -49,7 +54,52 @@ struct LCTabView: View {
                 }
                 .tag(LCTabIdentifier.settings)
         }
-        .tint(LCTheme.shared.accent)
+        .tint(theme.accent)
+        if appearanceEffects.effect == .snow {
+            LCSnowOverlay()
+                .zIndex(5)
+        }
+        if developerMode.showEnabledBanner {
+            VStack {
+                HStack(spacing: 10) {
+                    Image(systemName: "hammer.fill")
+                    Text("Developer Mode is on")
+                        .font(.subheadline.weight(.semibold))
+                    Spacer()
+                    Button("OK") { developerMode.dismissBanner() }
+                        .font(.subheadline.weight(.bold))
+                }
+                .padding(14)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+                Spacer()
+            }
+            .zIndex(25)
+        }
+        if appLock.isLocked {
+            LCAppLockView()
+                .transition(.opacity)
+                .zIndex(30)
+        }
+        } // ZStack
+        .onAppear {
+            appLock.lockIfNeeded()
+
+            let appearance = UITabBarAppearance()
+            appearance.configureWithDefaultBackground()
+            UITabBar.appearance().standardAppearance = appearance
+            if #available(iOS 15.0, *) {
+                UITabBar.appearance().scrollEdgeAppearance = appearance
+            }
+        }
+
+        .onChange(of: scenePhase) { newPhase in
+            if newPhase != .active {
+                appLock.lockIfNeeded()
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: theme.accentPreset)
         .downloadAlert(helper: downloadHelper)
         .environmentObject(downloadHelper)
         .alert("lc.common.error".loc, isPresented: $errorShow){

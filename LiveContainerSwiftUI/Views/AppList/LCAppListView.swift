@@ -16,6 +16,7 @@ class SearchContext: ObservableObject {
 
     private var cancellables = Set<AnyCancellable>()
 
+
     init() {
         $query
             .debounce(for: .seconds(0.2), scheduler: DispatchQueue.main)
@@ -80,9 +81,12 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
     
     @AppStorage("LCMultitaskMode", store: LCUtils.appGroupUserDefault) var multitaskMode: MultitaskMode = .virtualWindow
     @AppStorage("darkModeIcon", store: LCUtils.appGroupUserDefault) private var darkModeIcon = false
-    @ObservedObject private var theme = LCTheme.shared
     
     @State private var isViewAppeared = false
+    @State private var isRefreshingApps = false
+    @State private var refreshErrorShow = false
+    @State private var refreshErrorInfo = ""
+    @State private var showRefreshSuccess = false
     
     @ObservedObject var searchContext: SearchContext = SearchContext()
     var sortedApps: [LCAppModel] {
@@ -121,6 +125,76 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
         _installOptions = State(initialValue: [])
     }
     
+
+    @ObservedObject private var theme = LCTheme.shared
+    
+    @ViewBuilder
+    private var appLayoutContent: some View {
+        if filteredApps.isEmpty {
+            LCAppsEmptyState(
+                onImport: { choosingIPA = true },
+                onInstallURL: { Task { await startInstallFromUrl() } },
+                onOpenSideStore: { LCUtils.openSideStore(delegate: self) }
+            )
+        } else {
+            switch theme.appLayout {
+            case .list:
+                LazyVStack(spacing: 10) {
+                    ForEach(filteredApps, id: \.self) { app in
+                        LCAppBanner(appModel: app, delegate: self)
+                    }
+                }
+            case .grid:
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                    ForEach(filteredApps, id: \.self) { app in
+                        LCAppGridCell(
+                            appModel: app,
+                            onLaunch: { Task { await launchFromCell(app) } },
+                            onOpenSettings: { openNavigationView(view: AnyView(LCAppSettingsView(model: app))) },
+                            onRemove: { removeApp(app: app) }
+                        )
+                    }
+                }
+            case .compact:
+                LazyVStack(spacing: 8) {
+                    ForEach(filteredApps, id: \.self) { app in
+                        LCAppCompactRow(
+                            appModel: app,
+                            onLaunch: { Task { await launchFromCell(app) } },
+                            onOpenSettings: { openNavigationView(view: AnyView(LCAppSettingsView(model: app))) },
+                            onRemove: { removeApp(app: app) }
+                        )
+                    }
+                }
+            case .springboard:
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 76), spacing: 16)],
+                    spacing: 20
+                ) {
+                    ForEach(filteredApps, id: \.self) { app in
+                        LCSpringBoardAppCell(
+                            appModel: app,
+                            onLaunch: { Task { await launchFromCell(app) } },
+                            onOpenSettings: { openNavigationView(view: AnyView(LCAppSettingsView(model: app))) },
+                            onRemove: { removeApp(app: app) }
+                        )
+                    }
+                }
+                .padding(.top, 8)
+            }
+        }
+    }
+    
+    private func launchFromCell(_ app: LCAppModel) async {
+        do {
+            try await app.runApp()
+        } catch {
+            errorInfo = "\(error)"
+            errorShow = true
+        }
+    }
+
+    
     var body: some View {
         NavigationView {
             ScrollView {
@@ -136,85 +210,77 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                 if sharedModel.multiLCStatus != 2 {
                     LCDashboardHeaderView(
                         onRefreshAll: {
-                            // Open built-in SideStore and let user refresh; gated by LocalDevVPN in the button itself
-                            LCUtils.openSideStore(delegate: self)
+                            Task { await refreshAllAppsViaIntent() }
                         },
                         onOpenSideStore: {
                             LCUtils.openSideStore(delegate: self)
                         },
-                        onImportIPA: {
+                        onInstallIPA: {
                             choosingIPA = true
+                        },
+                        onInstallURL: {
+                            Task { await startInstallFromUrl() }
                         },
                         onOpenSettings: {
                             sharedModel.selectedTab = .settings
-                        }
+                        },
+                        isRefreshingApps: isRefreshingApps
                     )
-                    .padding(.bottom, 8)
+                    .padding(.bottom, 4)
                 }
                 
-                // Layout-aware app list (List / Grid / Compact / SpringBoard)
-                Group {
-                    switch LCTheme.shared.appLayoutMode {
-                    case .list, .compact:
-                        LazyVStack(spacing: LCTheme.shared.appLayoutMode == .compact ? 6 : 12) {
-                            ForEach(filteredApps, id: \.self) { app in
-                                LCAppBanner(appModel: app, delegate: self)
-                            }
-                            .transition(.scale.combined(with: .opacity))
-                        }
-                        .padding(.horizontal, LCTheme.shared.appLayoutMode == .compact ? 8 : 16)
-                        .padding(.vertical, 8)
-                        
-                    case .grid, .springboard:
-                        let columns = Array(
-                            repeating: GridItem(.flexible(), spacing: LCTheme.shared.appLayoutMode == .springboard ? 16 : 12),
-                            count: LCTheme.shared.appLayoutMode == .springboard ? 4 : 3
-                        )
-                        LazyVGrid(columns: columns, spacing: LCTheme.shared.appLayoutMode == .springboard ? 20 : 14) {
-                            ForEach(filteredApps, id: \.self) { app in
-                                LCSpringBoardAppCell(appModel: app, delegate: self, style: LCTheme.shared.appLayoutMode)
-                                    .transition(.scale.combined(with: .opacity))
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 12)
+                if showRefreshSuccess {
+                    HStack(spacing: 10) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(LCTheme.shared.success)
+                        Text("lc.dashboard.refreshSuccess".loc)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(LCTheme.shared.success)
+                        Spacer(minLength: 0)
                     }
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 12)
+                    .background(LCTheme.shared.success.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(LCTheme.shared.success.opacity(0.35), lineWidth: 1)
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 4)
+                    .transition(.move(edge: .top).combined(with: .opacity))
                 }
-                .animation(searchContext.isTyping ? nil : .spring(response: 0.35, dampingFraction: 0.82), value: filteredApps)
-                .animation(.spring(response: 0.4, dampingFraction: 0.85), value: LCTheme.shared.appLayoutModeRaw)
+                
+                // Section chrome + layout switcher
+                LCAppsSectionHeader(appCount: filteredApps.count) {
+                    customSortViewPresent = true
+                }
+                .environmentObject(sharedAppSortManager)
+                
+                // Layout-aware app list
+                appLayoutContent
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
+                    .animation(searchContext.isTyping ? nil : .easeInOut, value: filteredApps)
+                    .animation(.easeInOut(duration: 0.2), value: LCTheme.shared.appLayout)
 
                 VStack {
                     if LCUtils.appGroupUserDefault.bool(forKey: "LCStrictHiding") {
                         if sharedModel.isHiddenAppUnlocked {
-                            Group {
+                            LazyVStack {
                                 HStack {
                                     Text("lc.appList.hiddenApps".loc)
                                         .font(.system(.title2).bold())
                                     Spacer()
                                 }
-                                .padding(.horizontal)
                                 
-                                switch LCTheme.shared.appLayoutMode {
-                                case .list, .compact:
-                                    LazyVStack(spacing: LCTheme.shared.appLayoutMode == .compact ? 6 : 12) {
-                                        ForEach(filteredHiddenApps, id: \.self) { app in
-                                            LCAppBanner(appModel: app, delegate: self)
-                                        }
-                                    }
-                                    .padding(.horizontal, LCTheme.shared.appLayoutMode == .compact ? 8 : 16)
-                                case .grid, .springboard:
-                                    let columns = Array(
-                                        repeating: GridItem(.flexible(), spacing: 16),
-                                        count: LCTheme.shared.appLayoutMode == .springboard ? 4 : 3
-                                    )
-                                    LazyVGrid(columns: columns, spacing: 20) {
-                                        ForEach(filteredHiddenApps, id: \.self) { app in
-                                            LCSpringBoardAppCell(appModel: app, delegate: self, style: LCTheme.shared.appLayoutMode)
-                                        }
-                                    }
-                                    .padding(.horizontal, 16)
+                                ForEach(filteredHiddenApps, id: \.self) { app in
+                                    LCAppBanner(appModel: app, delegate: self)
                                 }
+                                .transition(.scale)
+                                
                             }
+                            .padding()
                             .transition(.opacity)
                             .animation(searchContext.isTyping ? nil : .easeInOut, value: filteredHiddenApps)
                             
@@ -224,46 +290,25 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                             }
                         }
                     } else if sharedModel.hiddenApps.count > 0 {
-                        VStack {
+                        LazyVStack {
                             HStack {
                                 Text("lc.appList.hiddenApps".loc)
                                     .font(.system(.title2).bold())
                                 Spacer()
                             }
-                            .padding(.horizontal)
-                            
-                            switch LCTheme.shared.appLayoutMode {
-                            case .list, .compact:
-                                LazyVStack {
-                                    ForEach(filteredHiddenApps, id: \.self) { app in
-                                        if sharedModel.isHiddenAppUnlocked {
-                                            LCAppBanner(appModel: app, delegate: self)
-                                        } else {
-                                            LCAppSkeletonBanner()
-                                        }
-                                    }
+                            ForEach(filteredHiddenApps, id: \.self) { app in
+                                if sharedModel.isHiddenAppUnlocked {
+                                    LCAppBanner(appModel: app, delegate: self)
+                                } else {
+                                    LCAppSkeletonBanner()
                                 }
-                                .padding(.horizontal)
-                            case .grid, .springboard:
-                                let columns = Array(repeating: GridItem(.flexible(), spacing: 16), count: 4)
-                                LazyVGrid(columns: columns, spacing: 20) {
-                                    ForEach(filteredHiddenApps, id: \.self) { app in
-                                        if sharedModel.isHiddenAppUnlocked {
-                                            LCSpringBoardAppCell(appModel: app, delegate: self, style: .springboard)
-                                        } else {
-                                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                                .fill(Color.gray.opacity(0.2))
-                                                .aspectRatio(1, contentMode: .fit)
-                                        }
-                                    }
-                                }
-                                .padding(.horizontal, 16)
+                            }
+                            .animation(.easeInOut, value: sharedModel.isHiddenAppUnlocked)
+                            .onTapGesture {
+                                Task { await authenticateUser() }
                             }
                         }
-                        .animation(.easeInOut, value: sharedModel.isHiddenAppUnlocked)
-                        .onTapGesture {
-                            Task { await authenticateUser() }
-                        }
+                        .padding()
                         .animation(searchContext.isTyping ? nil : .easeInOut, value: filteredHiddenApps)
                     }
 
@@ -290,79 +335,9 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                 }
             }
             
-            .navigationTitle("lc.appList.myApps".loc)
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    if sharedModel.multiLCStatus != 2 {
-                        if !installprogressVisible {
-                            Menu {
-                                
-                                Button("lc.appList.installFromIpa".loc, systemImage: "doc.badge.plus", action: {
-                                    choosingIPA = true
-                                })
-                                Button("lc.appList.installFromUrl".loc, systemImage: "link.badge.plus", action: {
-                                    Task{ await startInstallFromUrl() }
-                                })
-                            } label: {
-                                Label("add", systemImage: "plus")
-                            }
-                            
-                        } else {
-                            ProgressView().progressViewStyle(.circular).padding(.horizontal, 8)
-                        }
-                    }
-                }
-                ToolbarItem(placement: .topBarLeading) {
-                    if(UserDefaults.sideStoreExist()) {
-                        Button {
-                            LCUtils.openSideStore(delegate: self)
-                        } label: {
-                            IconImageView(icon: BuiltInSideStoreAppInfo.shared.iconIsDarkIcon(darkModeIcon))
-                                .frame(width: UIFont.preferredFont(forTextStyle: .body).lineHeight, height: UIFont.preferredFont(forTextStyle: .body).lineHeight)
+            .navigationTitle("LiveContainer")
+            .navigationBarTitleDisplayMode(.inline)
 
-                        }
-                    } else {
-                        Button("Help", systemImage: "questionmark") {
-                            helpPresent = true
-                        }
-                    }
-                    
-
-                }
-                
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("lc.appList.openLink".loc, systemImage: "link", action: {
-                        Task { await onOpenWebViewTapped() }
-                    })
-                }
-                
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Picker("Sort by", selection: $sharedAppSortManager.appSortType) {
-                            ForEach(AppSortType.allCases, id: \.self) { sortType in
-                                Label(sortType.displayName, systemImage: sortType.systemImage)
-                                    .tag(sortType)
-                            }
-                        }
-                        .onChange(of: sharedAppSortManager.appSortType) { newValue in
-                            if sharedAppSortManager.appSortType == .custom {
-                                customSortViewPresent = true
-                            }
-                        }
-                        if sharedAppSortManager.appSortType == .custom {
-                            Divider()
-                            
-                            Button {
-                                customSortViewPresent = true
-                            } label: {
-                                Label("lc.appList.sort.customManage".loc, systemImage: "slider.horizontal.3")
-                            }
-                        }
-                    } label: {
-                        Label("Sort by", systemImage: "line.3.horizontal.decrease.circle")
-                    }
-                }
-            }
         }
         .navigationViewStyle(StackNavigationViewStyle())
         .alert("lc.common.error".loc, isPresented: $errorShow){
@@ -373,6 +348,17 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
             })
         } message: {
             Text(errorInfo)
+        }
+        .alert("lc.dashboard.refreshFailed".loc, isPresented: $refreshErrorShow) {
+            Button("lc.common.ok".loc, action: {})
+            Button("lc.common.copy".loc, action: {
+                UIPasteboard.general.string = refreshErrorInfo
+            })
+            Button("lc.dashboard.sidestore".loc) {
+                LCUtils.openSideStore(delegate: self)
+            }
+        } message: {
+            Text(refreshErrorInfo)
         }
         .betterFileImporter(isPresented: $choosingIPA, types: [.ipa, .tipa], multiple: false, callback: { fileUrls in
             Task { await startInstallApp(fileUrls[0]) }
@@ -858,6 +844,45 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
         }
     }
     
+    /// Same path as the system “Refresh All Apps” Shortcut / App Intent.
+    /// Rule: UI only enables this when VPN is connected (enforced in header).
+    @MainActor
+    func refreshAllAppsViaIntent() async {
+        guard !isRefreshingApps else { return }
+        isRefreshingApps = true
+        defer { isRefreshingApps = false }
+        
+        guard let bridge = NSClassFromString("LCRefreshAllAppsBridge") as? NSObject.Type else {
+            LCUtils.openSideStore(delegate: self)
+            return
+        }
+        
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            typealias CompletionBlock = @convention(block) (NSError?) -> Void
+            let completion: CompletionBlock = { error in
+                DispatchQueue.main.async {
+                    if let error {
+                        self.refreshErrorInfo = error.localizedDescription
+                        self.refreshErrorShow = true
+                    } else {
+                        LCDashboardStatusManager.shared.refresh()
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            self.showRefreshSuccess = true
+                        }
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                self.showRefreshSuccess = false
+                            }
+                        }
+                    }
+                    cont.resume()
+                }
+            }
+            let blockObject: AnyObject = unsafeBitCast(completion, to: AnyObject.self)
+            bridge.perform(NSSelectorFromString("refreshWithCompletion:"), with: blockObject)
+        }
+    }
+    
     func startInstallFromUrl() async {
         guard let installUrlStr = await installUrlInput.open(), installUrlStr.count > 0 else {
             return
@@ -1049,14 +1074,89 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
     }
     
     func removeApp(app: LCAppModel) {
-        DispatchQueue.main.async {
-            sharedModel.apps.removeAll { now in
-                return app == now
+        // Grid/Compact used to only drop the row from the array — disk stayed.
+        // Route every layout through the same confirmed uninstall path as list banners.
+        Task { @MainActor in
+            await uninstallAppFully(app)
+        }
+    }
+    
+    @MainActor
+    private func uninstallAppFully(_ app: LCAppModel) async {
+        let displayName = app.appInfo.displayName() ?? app.displayName
+        let confirm = await presentSimpleConfirm(
+            title: "Uninstall App",
+            message: "Are you sure you want to uninstall \(displayName)?",
+            confirmTitle: "Uninstall",
+            isDestructive: true
+        )
+        guard confirm else { return }
+        
+        var removeData = false
+        let containers = app.appInfo.containers
+        if !containers.isEmpty {
+            removeData = await presentSimpleConfirm(
+                title: "Delete App Data",
+                message: "Also delete data containers for \(displayName)?",
+                confirmTitle: "Delete",
+                isDestructive: true
+            )
+        }
+        
+        do {
+            guard let bundlePath = app.appInfo.bundlePath() else {
+                throw CocoaError(.fileNoSuchFile)
             }
-            sharedModel.hiddenApps.removeAll { now in
-                return app == now
+            let fm = FileManager.default
+            try fm.removeItem(atPath: bundlePath)
+            
+            if removeData {
+                for container in containers {
+                    let dataUUID = container.folderName
+                    let dataURL = LCPath.dataPath.appendingPathComponent(dataUUID)
+                    if fm.fileExists(atPath: dataURL.path) {
+                        try? fm.removeItem(at: dataURL)
+                    }
+                    LCUtils.removeAppKeychain(dataUUID: dataUUID)
+                    DataManager.shared.model.appDataFolderNames.removeAll { $0 == dataUUID }
+                }
             }
             
+            sharedModel.apps.removeAll { $0 == app }
+            sharedModel.hiddenApps.removeAll { $0 == app }
+        } catch {
+            errorInfo = error.localizedDescription
+            errorShow = true
+        }
+    }
+    
+    @MainActor
+    private func presentSimpleConfirm(
+        title: String,
+        message: String,
+        confirmTitle: String,
+        isDestructive: Bool
+    ) async -> Bool {
+        await withCheckedContinuation { cont in
+            let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in
+                cont.resume(returning: false)
+            })
+            alert.addAction(UIAlertAction(
+                title: confirmTitle,
+                style: isDestructive ? .destructive : .default
+            ) { _ in
+                cont.resume(returning: true)
+            })
+            var presenter = UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .flatMap { $0.windows }
+                .first { $0.isKeyWindow }?
+                .rootViewController
+            while let presented = presenter?.presentedViewController {
+                presenter = presented
+            }
+            presenter?.present(alert, animated: true)
         }
     }
     
@@ -1112,6 +1212,9 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
         
         if appFound == nil && bundleId == "builtinSideStore" {
             appFound = LCAppModel(appInfo: BuiltInSideStoreAppInfo.shared)
+        }
+        if appFound == nil && bundleId == "builtinStikDebug" {
+            appFound = LCAppModel(appInfo: BuiltInStikDebugAppInfo.shared)
         }
         
         if isFoundAppLocked && !sharedModel.isHiddenAppUnlocked {
@@ -1191,11 +1294,11 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                 if jitEnabler == .StosDebug || jitEnabler == .StosDebugLC {
                     let encoded = encodedData.map { "&script=\($0)" } ?? ""
                     if jitEnabler == .StosDebugLC {
-                        if let app = sharedModel.apps.first(where: { app in
-                            return app.appInfo.urlSchemes().contains("stosdebug") &&
-                            (sharedModel.multiLCStatus != 2 || app.appInfo.isShared)
+                        if sharedModel.apps.contains(where: { candidate in
+                            return candidate.appInfo.urlSchemes().contains("stosdebug") &&
+                            (sharedModel.multiLCStatus != 2 || candidate.appInfo.isShared)
                         }) {
-                            if var url = URL(string: "stosdebug://enableJIT?bundleId=\(Bundle.main.bundleIdentifier!)&appName=\(appName)&pid=\(pid)&relaunchApp=false& forcePID=true\(encoded)") {
+                            if let url = URL(string: "stosdebug://enableJIT?bundleId=\(Bundle.main.bundleIdentifier!)&appName=\(appName)&pid=\(pid)&relaunchApp=false& forcePID=true\(encoded)") {
                                 Task { await openWebView(urlString: url.absoluteString) }
                             }
                         } else {
@@ -1204,7 +1307,7 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                             return
                         }
                     } else {
-                        if var url = URL(string: "stosdebug://enableJIT?bundleId=\(Bundle.main.bundleIdentifier!)&appName=\(appName)&pid=\(pid)&forcePID=true\(encoded)") {
+                        if let url = URL(string: "stosdebug://enableJIT?bundleId=\(Bundle.main.bundleIdentifier!)&appName=\(appName)&pid=\(pid)&forcePID=true\(encoded)") {
                             UIApplication.shared.open(url)
                         }
                     }
@@ -1214,9 +1317,9 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                 let encoded = encodedData.map { "&script-data=\($0)" } ?? ""
                 if let url = URL(string: "stikjit://enable-jit?bundle-id=\(Bundle.main.bundleIdentifier!)&pid=\(pid)\(encoded)") {
                     if jitEnabler == .StikJITLC {
-                        if let app = sharedModel.apps.first(where: { app in
-                            return app.appInfo.urlSchemes().contains("stikjit") &&
-                            (sharedModel.multiLCStatus != 2 || app.appInfo.isShared)
+                        if sharedModel.apps.contains(where: { candidate in
+                            return candidate.appInfo.urlSchemes().contains("stikjit") &&
+                            (sharedModel.multiLCStatus != 2 || candidate.appInfo.isShared)
                         }) {
                             Task { await openWebView(urlString: url.absoluteString) }
                         } else {
@@ -1268,6 +1371,20 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
         if url.isFileURL {
             Task { await installFromUrl(urlStr: url.absoluteString) }
             return
+        }
+        
+        // Cross-app URL schemes: if another guest app registered this scheme, offer to open it.
+        let scheme = url.scheme?.lowercased() ?? ""
+        let isLiveContainerScheme = scheme.hasPrefix("livecontainer")
+        if !isLiveContainerScheme && !scheme.isEmpty {
+            let allApps = sharedModel.apps + sharedModel.hiddenApps
+            let guestMatches = LCGuestURLRouter.matches(for: url, in: allApps)
+            if !guestMatches.isEmpty {
+                Task {
+                    _ = await LCGuestURLRouter.handleIfGuest(url: url, apps: allApps, from: nil)
+                }
+                return
+            }
         }
         
         if url.scheme == "sidestore" && UserDefaults.sideStoreExist() {
@@ -1332,95 +1449,6 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
     
 }
 
-// MARK: - SpringBoard / Grid App Cell (LiveContainer Extended)
-
-struct LCSpringBoardAppCell: View {
-    @ObservedObject var appModel: LCAppModel
-    var delegate: LCAppBannerDelegate
-    var style: LCAppLayoutMode
-    
-    @AppStorage("darkModeIcon", store: LCUtils.appGroupUserDefault) private var darkModeIcon = false
-    @ObservedObject private var theme = LCTheme.shared
-    @State private var isPressed = false
-    
-    private var iconSize: CGFloat {
-        style == .springboard ? 62 : 56
-    }
-    
-    private var cornerRadius: CGFloat {
-        style == .springboard ? 14 : 12
-    }
-    
-    var body: some View {
-        Button {
-            Task {
-                do {
-                    try await appModel.runApp()
-                } catch {
-                    // Banner path surfaces errors via shared model / alerts
-                }
-            }
-        } label: {
-            VStack(spacing: 6) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .fill(Color(UIColor.secondarySystemFill))
-                        .frame(width: iconSize, height: iconSize)
-                    
-                    if let uiImage = appModel.appInfo.iconIsDarkIcon(darkModeIcon) {
-                        Image(uiImage: uiImage)
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: iconSize, height: iconSize)
-                            .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                    } else {
-                        Image(systemName: "app.fill")
-                            .font(.system(size: iconSize * 0.45))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .shadow(color: Color.black.opacity(0.12), radius: isPressed ? 1 : 4, y: isPressed ? 0.5 : 2)
-                .scaleEffect(isPressed ? 0.92 : 1.0)
-                
-                Text(appModel.displayName)
-                    .font(.system(size: style == .springboard ? 11 : 12, weight: .medium))
-                    .foregroundStyle(.primary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: iconSize + 12)
-            }
-            .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { _ in
-                    withAnimation(.easeOut(duration: 0.12)) { isPressed = true }
-                }
-                .onEnded { _ in
-                    withAnimation(.spring(response: 0.28, dampingFraction: 0.7)) { isPressed = false }
-                }
-        )
-        .contextMenu {
-            Button {
-                delegate.openNavigationView(view: AnyView(
-                    LCAppSettingsView(model: appModel)
-                ))
-            } label: {
-                Label("Settings", systemImage: "gearshape")
-            }
-            
-            Button(role: .destructive) {
-                delegate.removeApp(app: appModel)
-            } label: {
-                Label("Remove", systemImage: "trash")
-            }
-        }
-    }
-}
-
 extension View {
     func apply<V: View>(@ViewBuilder _ block: (Self) -> V) -> V { block(self) }
 }
-

@@ -83,21 +83,17 @@ final class LCStorageManagementModel: ObservableObject {
         var sizesByCategory: [StorageCategory: Int64] = [:]
         
         let knownRoots = uniquePaths([LCPath.docPath, LCPath.lcGroupDocPath])
-        let bundleRoots = uniquePaths([LCPath.bundlePath, LCPath.lcGroupBundlePath])
-        let containerRoots = uniquePaths([LCPath.dataPath, LCPath.lcGroupDataPath])
+        // Bundle/container sizes come from per-app measurements (appItems), not root walks.
         let appGroupRoots = uniquePaths([LCPath.appGroupPath, LCPath.lcGroupAppGroupPath])
         let tweakRoots = uniquePaths([LCPath.tweakPath, LCPath.lcGroupTweakPath])
-        
         
         sizesByCategory[.appBundle] = 0
         sizesByCategory[.containers] = 0
         
-        var sideStoreContainerSize: Int64 = 0
         for appItem in appItems {
+            // Built-in SideStore lives under Frameworks; skip its framework path from app-bundle totals.
             if !(appItem.appModel.appInfo is BuiltInSideStoreAppInfo) {
                 sizesByCategory[.appBundle]! += appItem.bundleSize ?? 0
-            } else {
-                sideStoreContainerSize = appItem.containersSize
             }
             
             for containerDetail in appItem.containerDetails {
@@ -287,7 +283,8 @@ final class LCStorageManagementModel: ObservableObject {
         }
 
         var totalSize: Int64 = 0
-        for case let fileURL as URL in enumerator {
+        // Prefer nextObject() over for-in so we do not call makeIterator() from an async context (Swift 6).
+        while let fileURL = enumerator.nextObject() as? URL {
             try Task.checkCancellation()
 
             let resourceValues = try fileURL.resourceValues(forKeys: resourceKeys)

@@ -76,7 +76,13 @@ struct AppSceneViewSwiftUI: UIViewControllerRepresentable {
                 settings.peripheryInsets = defaultInsets
                 settings.safeAreaInsetsPortrait = defaultInsets
                 settings.deviceOrientation = UIDevice.current.orientation
-                settings.setInterfaceOrientation(UIApplication.shared.statusBarOrientation)
+                let orientation: UIInterfaceOrientation = {
+                    if let scene = vc.view.window?.windowScene {
+                        return scene.interfaceOrientation
+                    }
+                    return .portrait
+                }()
+                settings.setInterfaceOrientation(orientation)
                 if(settings.interfaceOrientation().isLandscape) {
                     settings.setFrame(CGRect(x: 0, y: 0, width: vc.view.frame.size.height, height: vc.view.frame.size.width))
                 } else {

@@ -354,24 +354,27 @@ extension LCUtils {
                 await UIApplication.shared.open(URL(string: launchURLStr)!)
             }
             
-        } else if jitEnabler == .StikJIT || jitEnabler == .StikJITLC {
-            var launchURLStr = "stikjit://enable-jit?bundle-id=\(Bundle.main.bundleIdentifier!)"
-
+                } else if jitEnabler == .StikJIT || jitEnabler == .StikJITLC {
+            // StikDebug only: stikdebug://enable-jit?bundle-id=&pid=&script-name=
+            let pid = getpid()
+            let bundleId = Bundle.main.bundleIdentifier ?? ""
+            var launchURLStr = "stikdebug://enable-jit?bundle-id=\(bundleId)&pid=\(pid)"
             if let script = script, !script.isEmpty {
                 launchURLStr += "&script-data=\(script)"
+            } else {
+                launchURLStr += "&script-name=universal.js"
             }
             let launchURL : URL
             if jitEnabler == .StikJITLC {
                 let encodedStr = Data(launchURLStr.utf8).base64EncodedString()
 
-
                 var appToLaunch: LCAppModel? = nil
-                // find an app that can respond to stikjit://
+                // find an app that can respond to stikdebug://
                 appLoop:
                 for app in DataManager.shared.model.apps {
                     if let schemes = app.appInfo.urlSchemes() {
                         for scheme in schemes {
-                            if let scheme = scheme as? String, scheme == "stikjit" {
+                            if let scheme = scheme as? String, scheme == "stikdebug" || scheme == "stikjit" {
                                 appToLaunch = app
                                 break appLoop
                             }
@@ -521,6 +524,20 @@ extension LCUtils {
         
         Task {
             try await sideStoreApp.runApp(bundleIdOverride: "builtinSideStore", urlStr: urlStr)
+        }
+    }
+
+    @MainActor
+    static func openBuiltInStikDebug(delegate: LCAppModelDelegate? = nil) async {
+        guard BuiltInStikDebugAppInfo.isEmbedded else {
+            _ = await LCStikIntegration.shared.openEnableJIT()
+            return
+        }
+        let app = LCAppModel(appInfo: BuiltInStikDebugAppInfo.shared, delegate: delegate)
+        do {
+            try await app.runApp(bundleIdOverride: "builtinStikDebug")
+        } catch {
+            print("openBuiltInStikDebug: \(error)")
         }
     }
 }

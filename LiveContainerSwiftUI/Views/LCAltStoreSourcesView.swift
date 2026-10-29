@@ -481,6 +481,7 @@ private extension Color {
 }
 
 struct LCSourcesView: View {
+    @ObservedObject private var theme = LCTheme.shared
     @StateObject private var viewModel = AltStoreSourcesViewModel()
     @State private var errorMessage: String?
     @State private var sourcePendingRemoval: AltStoreSourcesViewModel.SourceItem?
@@ -496,18 +497,39 @@ struct LCSourcesView: View {
         NavigationView {
             Group {
                 if viewModel.sources.isEmpty {
-                    VStack(spacing: 12) {
-                        Image(systemName: "link.badge.plus")
-                            .font(.system(size: 48))
-                            .foregroundColor(.secondary)
-                        Text("lc.sources.empty".loc)
-                            .multilineTextAlignment(.center)
-                            .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 0) {
+                        LCChromeHeader(
+                            title: "Sources",
+                            accentWord: "Extended",
+                            secondaryTag: "Fork",
+                            subtitle: "AltStore / SideStore repositories"
+                        )
+                        VStack(spacing: 16) {
+                            Spacer(minLength: 40)
+                            Image(systemName: "link.badge.plus")
+                                .font(.system(size: 48))
+                                .foregroundStyle(theme.secondaryText)
+                            Text("lc.sources.empty".loc)
+                                .multilineTextAlignment(.center)
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 24)
+                            Text("Tap + above to add a source URL")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(theme.accent)
+                            Spacer(minLength: 0)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
-                    .padding()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
                 } else {
                     ScrollView {
+                    LCChromeHeader(
+                        title: "Sources",
+                        accentWord: "Extended",
+                        secondaryTag: "Fork",
+                        subtitle: "AltStore / SideStore repositories"
+                    )
+
                         LazyVStack(spacing: 16) {
                             ForEach(viewModel.sources, id: \.id) { item in
                                 let apps = filteredApps(for: item)
@@ -540,7 +562,7 @@ struct LCSourcesView: View {
                     }
                 }
             }
-            .navigationTitle("lc.tabView.sources".loc)
+            .navigationTitle("")
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     if viewModel.isRefreshingAll {
@@ -558,6 +580,11 @@ struct LCSourcesView: View {
                 }
             }
         }
+        .lcHideListBackground()
+        .background(LCChromePageBackground())
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+        .tint(theme.accent)
         .navigationViewStyle(StackNavigationViewStyle())
         .alert("lc.common.error".loc, isPresented: Binding<Bool>(
             get: { errorMessage != nil },

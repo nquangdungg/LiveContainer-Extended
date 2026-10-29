@@ -69,6 +69,18 @@ struct LCTweakFolderView : View {
 
     var body: some View {
         List {
+            if isRoot {
+                Section {
+                    LCChromeHeader(
+                        title: "Tweaks",
+                        accentWord: "Extended",
+                        secondaryTag: "Fork",
+                        subtitle: "Inject dylibs & frameworks"
+                    )
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+                }
+            }
             Section {
                 ForEach(tweakItems, id:\.self) { tweakItem in
                     HStack {
@@ -392,11 +404,16 @@ struct LCTweakFolderView : View {
 }
 
 struct LCTweaksView: View {
+    @ObservedObject private var theme = LCTheme.shared
     var body: some View {
         NavigationView {
             LCTweakFolderView(baseUrl: LCPath.tweakPath, isRoot: true)
+                .lcHideListBackground()
+                .background(LCChromePageBackground())
+                .navigationTitle("")
+                .navigationBarTitleDisplayMode(.inline)
         }
         .navigationViewStyle(StackNavigationViewStyle())
-
+        .tint(theme.accent)
     }
 }

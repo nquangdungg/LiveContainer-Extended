@@ -351,11 +351,14 @@ class LCAppModel: ObservableObject, Hashable {
                             continuation.resume(throwing: "Failed to obtain PID from LiveProcess")
                             return
                         }
+                        let scriptData = self.jitLaunchScriptJs
+                        let appName = self.appInfo.displayName() ?? ""
+                        let delegate = self.delegate
                         Task {
-                            if let scriptData = self.jitLaunchScriptJs, !scriptData.isEmpty {
-                                await self.delegate?.jitLaunch(withPID: pidNumber.intValue, withScript: scriptData, appName: self.appInfo.displayName())
+                            if let scriptData, !scriptData.isEmpty {
+                                await delegate?.jitLaunch(withPID: pidNumber.intValue, withScript: scriptData, appName: appName)
                             } else {
-                                await self.delegate?.jitLaunch(withPID: pidNumber.intValue, withScript: nil, appName: self.appInfo.displayName())
+                                await delegate?.jitLaunch(withPID: pidNumber.intValue, withScript: nil, appName: appName)
                             }
                             continuation.resume()
                         }
@@ -530,7 +533,7 @@ class LCAppModel: ObservableObject, Hashable {
             if !found {
                 found = MultitaskDockManager.shared.bringMultitaskViewToFront(uuid: dataUUID)
             }
-            if let urlScheme, !found  {
+            if urlScheme != nil && !found {
                 UserDefaults.standard.removeObject(forKey: "launchAppUrlScheme")
             }
             return found

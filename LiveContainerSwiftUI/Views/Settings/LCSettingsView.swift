@@ -69,6 +69,10 @@ struct LCSettingsView: View {
     @AppStorage("BKNoWatchdogs") var disableLiveProcessWatchdog = false
     
     @EnvironmentObject private var sharedModel : SharedModel
+    @ObservedObject private var theme = LCTheme.shared
+    @ObservedObject private var developerMode = LCDeveloperMode.shared
+    @ObservedObject private var appearanceEffects = LCAppearanceEffects.shared
+    @State private var confirmDevMode = false
     
     @State private var isViewAppeared = false
     
@@ -79,9 +83,29 @@ struct LCSettingsView: View {
         _store = State(initialValue: LCUtils.store())
     }
     
+
+    private var extendedVersionString: String {
+        let short = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
+        let build = Bundle.main.infoDictionary?["CFBundleVersion"] as? String
+        if let short = short, let build = build, short != build {
+            return "\(short) (\(build))"
+        }
+        return short ?? build ?? "0.0.0"
+    }
+    
     var body: some View {
         NavigationView {
             Form {
+                Section {
+                    LCChromeHeader(
+                        title: "Settings",
+                        accentWord: "Extended",
+                        secondaryTag: "Fork",
+                        subtitle: "v\(extendedVersionString) · Signing · Appearance · Runtime"
+                    )
+                    .listRowInsets(EdgeInsets())
+                    .listRowBackground(Color.clear)
+                }
                 if sharedModel.multiLCStatus != 2 {
                     Section{
                         if !certificateDataFound {
@@ -116,7 +140,7 @@ struct LCSettingsView: View {
                         }
 
                     } header: {
-                        Text("lc.settings.jitLess".loc)
+                        Text("Signing & Certificate")
                     } footer: {
                         Text("lc.settings.jitLessDesc".loc)
                     }
@@ -201,7 +225,71 @@ struct LCSettingsView: View {
                     }
                 }
                 
-                Section{
+                Section {
+                    // Accent — live circles
+                    VStack(alignment: .leading, spacing: 12) {
+                        HStack {
+                            Text("Accent Color")
+                                .font(.system(size: 15, weight: .semibold))
+                            Spacer()
+                            Text(theme.accentPreset.rawValue)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(theme.accent)
+                                .id(theme.accentPreset) // force refresh label
+                        }
+                        HStack(spacing: 10) {
+                            ForEach(LCAccentPreset.allCases) { preset in
+                                Button {
+                                    withAnimation(.easeInOut(duration: 0.15)) {
+                                        theme.setAccent(preset)
+                                    }
+                                } label: {
+                                    ZStack {
+                                        Circle()
+                                            .fill(preset.color)
+                                            .frame(width: 28, height: 28)
+                                        if theme.accentPreset == preset {
+                                            Circle()
+                                                .strokeBorder(Color.white, lineWidth: 2)
+                                                .frame(width: 28, height: 28)
+                                            Image(systemName: "checkmark")
+                                                .font(.system(size: 11, weight: .bold))
+                                                .foregroundStyle(.white)
+                                        }
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                    
+                    // App layout
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("App Layout")
+                            .font(.system(size: 15, weight: .semibold))
+                        HStack(spacing: 8) {
+                            ForEach(LCAppLayoutMode.allCases) { mode in
+                                Button {
+                                    withAnimation { theme.appLayout = mode }
+                                } label: {
+                                    HStack(spacing: 6) {
+                                        Image(systemName: mode.systemImage)
+                                        Text(mode.rawValue)
+                                    }
+                                    .font(.system(size: 13, weight: .semibold))
+                                    .foregroundStyle(theme.appLayout == mode ? Color.white : Color.primary)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .background(theme.appLayout == mode ? theme.accent : Color(UIColor.secondarySystemFill))
+                                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    .padding(.vertical, 4)
+                    
                     Toggle(isOn: $dynamicColors) {
                         Text("lc.settings.dynamicColors".loc)
                     }
@@ -210,49 +298,13 @@ struct LCSettingsView: View {
                             Text("lc.settings.darkModeIcon".loc)
                         }
                     }
-                    
-                    // LiveContainer Extended — Accent color
-                    Picker(selection: Binding(
-                        get: { LCTheme.shared.accentPreset },
-                        set: { LCTheme.shared.accentPreset = $0 }
-                    )) {
-                        ForEach(LCAccentPreset.allCases) { preset in
-                            HStack {
-                                Circle()
-                                    .fill(preset.color)
-                                    .frame(width: 14, height: 14)
-                                Text(preset.rawValue)
-                            }
-                            .tag(preset)
-                        }
-                    } label: {
-                        Text("Accent Color")
+                    Toggle(isOn: $theme.doubleTapStatusBarToExit) {
+                        Text("Tap status bar (clock) to exit app")
                     }
-                    
-                    // App list layout mode (List / Grid / Compact / SpringBoard)
-                    Picker(selection: Binding(
-                        get: { LCTheme.shared.appLayoutMode },
-                        set: { LCTheme.shared.appLayoutMode = $0 }
-                    )) {
-                        ForEach(LCAppLayoutMode.allCases) { mode in
-                            Label(mode.displayName, systemImage: mode.systemImage)
-                                .tag(mode)
-                        }
-                    } label: {
-                        Text("App Layout")
-                    }
-                    
-                    Toggle(isOn: Binding(
-                        get: { LCTheme.shared.statusBarTapToExit },
-                        set: { LCTheme.shared.statusBarTapToExit = $0 }
-                    )) {
-                        Text("One-tap Status Bar to Exit App")
-                    }
-                    
                 } header: {
-                    Text("lc.settings.interface".loc)
+                    Text("Appearance")
                 } footer: {
-                    Text("lc.settings.dynamicColors.desc".loc + "\n\nOne-tap the status bar (clock side) while an app is running to return to LiveContainer. SpringBoard layout shows a home-screen style grid.")
+                    Text("Accent applies instantly. Layout changes the Apps tab (List / Grid / Compact / SpringBoard).")
                 }
                 Section{
                     Toggle(isOn: $frameShortIcon) {
@@ -321,64 +373,176 @@ struct LCSettingsView: View {
                     }
                 }
                 
+                LCAppLockSettingsSection()
+
+                LCStikSettingsSection()
+
                 Section {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("LiveContainer Extended")
-                            .font(.headline)
-                        Text("An extended implementation of LiveContainer")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.vertical, 4)
-                    
-                    HStack {
-                        Image(systemName: "person.crop.circle.fill")
-                            .foregroundStyle(LCTheme.shared.accent)
-                        Button("Nguyen Quang Dung") {
-                            openLeadDeveloperGitHub()
+                    if developerMode.isEnabled {
+                        HStack {
+                            Label("Developer Mode", systemImage: "hammer.fill")
+                            Spacer()
+                            Text("On")
+                                .foregroundStyle(theme.accent)
+                                .font(.subheadline.weight(.semibold))
+                        }
+                        Button("Turn Off Developer Mode", role: .destructive) {
+                            developerMode.disable()
+                        }
+                    } else {
+                        Button {
+                            confirmDevMode = true
+                        } label: {
+                            Label("Enable Developer Mode", systemImage: "hammer")
                         }
                     }
                 } header: {
-                    Text("Development & Engineering")
+                    Text("Developer")
                 } footer: {
-                    Text("Lead Developer of LiveContainer Extended")
+                    Text("Unlocks custom guest icons, Info.plist editor, and other advanced tools. Enabling requires an app restart.")
+                }
+                .alert("Enable Developer Mode?", isPresented: $confirmDevMode) {
+                    Button("Cancel", role: .cancel) {}
+                    Button("Enable & Restart", role: .destructive) {
+                        developerMode.requestEnableAndRestart()
+                    }
+                } message: {
+                    Text("LiveContainer will restart. After relaunch you will see a confirmation that Developer Mode is on.")
+                }
+
+                Section {
+                    Picker(selection: $appearanceEffects.effect) {
+                        ForEach(LCParticleEffect.allCases) { effect in
+                            Text(effect.rawValue).tag(effect)
+                        }
+                    } label: {
+                        Label("Background Effect", systemImage: "sparkles")
+                    }
+                } header: {
+                    Text("Atmosphere")
+                } footer: {
+                    Text("Optional decorative overlay. Snow is available in this release; more effects may be added later.")
+                }
+
+                Section {
+                    Text("Use Multitask windows to keep apps alive while switching. Minimize from the window title bar or PiP to set an app aside without force-closing it, then restore it from the multitask dock.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } header: {
+                    Text("Temporary Close")
+                }
+
+                Section {
+                    VStack(alignment: .leading, spacing: 12) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack(spacing: 6) {
+                                Text("LiveContainer")
+                                    .font(.system(size: 18, weight: .bold, design: .rounded))
+                                Text("Extended")
+                                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                                    .foregroundStyle(theme.accent)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 2)
+                                    .background(theme.accent.opacity(0.12))
+                                    .clipShape(Capsule())
+                                Text("Fork")
+                                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                                    .foregroundStyle(theme.accentOpposite)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 2)
+                                    .background(theme.accentOpposite.opacity(0.12))
+                                    .clipShape(Capsule())
+                            }
+                            Text("Version \(extendedVersionString)")
+                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                .foregroundStyle(theme.accent)
+                            Text("An extended implementation of LiveContainer")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(.secondary)
+                        }
+                        
+                        Divider()
+                        
+                        Button {
+                            openLeadDeveloperGitHub()
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "person.crop.circle.fill")
+                                    .font(.system(size: 28))
+                                    .foregroundStyle(theme.accent)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Nguyen Quang Dung")
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundStyle(.primary)
+                                    Text("Lead Developer · Engineering")
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Image(systemName: "arrow.up.right.circle.fill")
+                                    .foregroundStyle(theme.accent)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(.vertical, 8)
+                } header: {
+                    Text("About")
+                } footer: {
+                    Text("Version follows GitHub Releases (SemVer). Tap the lead developer to open GitHub.")
                 }
                 
                 Section {
-                    HStack {
-                        Image("GitHub")
-                        Button("LiveContainer/LiveContainer") {
-                            openGitHub()
+                    Button { openGitHub() } label: {
+                        HStack {
+                            Image(systemName: "chevron.left.forwardslash.chevron.right")
+                                .foregroundStyle(theme.accent)
+                            Text("LiveContainer (original)")
+                            Spacer()
+                            Text("GitHub")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                     }
-                    HStack {
-                        Image("Twitter")
-                        Button("khanhduytran0") {
-                            openTwitter()
+                    Button { openTwitter() } label: {
+                        HStack {
+                            Image(systemName: "at")
+                                .foregroundStyle(theme.accent)
+                            Text("khanhduytran0")
+                            Spacer()
+                            Text("X / Twitter")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                     }
-                    HStack {
-                        Image("GitHub")
-                        Button("Huge_Black") {
-                            openGitHub2()
+                    Button { openGitHub2() } label: {
+                        HStack {
+                            Image(systemName: "person.fill")
+                                .foregroundStyle(theme.accent)
+                            Text("Huge_Black")
+                            Spacer()
+                            Text("GitHub")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                     }
                 } header: {
                     Text("Original project")
                 } footer: {
-                    Text("Based on LiveContainer — Original authors and contributors\n\n" + "lc.settings.warning".loc)
+                    Text("Based on LiveContainer — original authors & contributors.\n\n" + "lc.settings.warning".loc)
                 }
                 
-                VStack{
+                Section {
                     Text(LCUtils.getVersionInfo())
-                        .foregroundStyle(.gray)
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 6)
                         .onTapGesture(count: 5) {
                             sharedModel.developerMode = true
                         }
                 }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                    .background(Color(UIColor.systemGroupedBackground))
-                    .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
                 
                 if sharedModel.developerMode {
                     Section {
@@ -504,6 +668,10 @@ struct LCSettingsView: View {
                 }
             )
         }
+        .lcHideListBackground()
+        .background(LCChromePageBackground())
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
         .navigationViewStyle(StackNavigationViewStyle())
         .onAppear() {
             if !isViewAppeared {

@@ -2,13 +2,14 @@
 //  LCTheme.swift
 //  LiveContainerSwiftUI
 //
-//  LiveContainer Extended — Theme & Accent system (Cloudflare-inspired)
+//  LiveContainer Extended — Theme, accent, app layout
 //
 
 import SwiftUI
 import UIKit
+import Combine
 
-// MARK: - Accent Color
+// MARK: - Accent
 
 enum LCAccentPreset: String, CaseIterable, Identifiable {
     case orange = "Orange"
@@ -24,7 +25,7 @@ enum LCAccentPreset: String, CaseIterable, Identifiable {
     
     var color: Color {
         switch self {
-        case .orange: return Color(red: 1.0, green: 0.42, blue: 0.21)      // Cloudflare-ish orange
+        case .orange: return Color(red: 1.00, green: 0.42, blue: 0.21)
         case .blue:   return Color(red: 0.20, green: 0.55, blue: 0.95)
         case .indigo: return Color(red: 0.35, green: 0.40, blue: 0.95)
         case .teal:   return Color(red: 0.10, green: 0.72, blue: 0.68)
@@ -34,13 +35,9 @@ enum LCAccentPreset: String, CaseIterable, Identifiable {
         case .red:    return Color(red: 0.92, green: 0.28, blue: 0.28)
         }
     }
-    
-    var uiColor: UIColor {
-        UIColor(color)
-    }
 }
 
-// MARK: - App List Layout Mode
+// MARK: - App layout
 
 enum LCAppLayoutMode: String, CaseIterable, Identifiable {
     case list = "List"
@@ -50,97 +47,126 @@ enum LCAppLayoutMode: String, CaseIterable, Identifiable {
     
     var id: String { rawValue }
     
-    var displayName: String {
-        switch self {
-        case .list: return "List"
-        case .grid: return "Grid"
-        case .compact: return "Compact"
-        case .springboard: return "SpringBoard"
-        }
-    }
-    
     var systemImage: String {
         switch self {
         case .list: return "list.bullet"
         case .grid: return "square.grid.2x2"
-        case .compact: return "rectangle.grid.1x2"
+        case .compact: return "list.bullet.rectangle"
         case .springboard: return "square.grid.3x3.fill"
         }
     }
 }
 
-// MARK: - Theme Manager
+// MARK: - Theme (live-updating)
 
 final class LCTheme: ObservableObject {
     static let shared = LCTheme()
     
-    @AppStorage("LCAccentPreset", store: LCUtils.appGroupUserDefault)
-    var accentPresetRaw: String = LCAccentPreset.orange.rawValue
+    private let defaults: UserDefaults = LCUtils.appGroupUserDefault
     
-    /// When true, a single tap on the status bar (clock side) exits the guest app.
-    /// Key kept as LCDoubleTapStatusBarToExit for backward compatibility with existing installs.
-    @AppStorage("LCDoubleTapStatusBarToExit", store: LCUtils.appGroupUserDefault)
-    var statusBarTapToExit: Bool = true
-    
-    @AppStorage("LCAppLayoutMode", store: LCUtils.appGroupUserDefault)
-    var appLayoutModeRaw: String = LCAppLayoutMode.list.rawValue
-    
-    var accentPreset: LCAccentPreset {
-        get { LCAccentPreset(rawValue: accentPresetRaw) ?? .orange }
-        set { accentPresetRaw = newValue.rawValue }
+    @Published var accentPreset: LCAccentPreset {
+        didSet {
+            defaults.set(accentPreset.rawValue, forKey: "LCAccentPreset")
+            objectWillChange.send()
+        }
     }
     
-    var appLayoutMode: LCAppLayoutMode {
-        get { LCAppLayoutMode(rawValue: appLayoutModeRaw) ?? .list }
-        set { appLayoutModeRaw = newValue.rawValue }
+    @Published var doubleTapStatusBarToExit: Bool {
+        didSet {
+            defaults.set(doubleTapStatusBarToExit, forKey: "LCDoubleTapStatusBarToExit")
+        }
+    }
+    
+    @Published var appLayout: LCAppLayoutMode {
+        didSet {
+            defaults.set(appLayout.rawValue, forKey: "LCAppLayoutMode")
+            objectWillChange.send()
+        }
     }
     
     var accent: Color { accentPreset.color }
-    var accentUIColor: UIColor { accentPreset.uiColor }    
-    // Cloudflare-inspired surface colors
+    
+    /// Rough complementary color for secondary tags (English "Fork", etc.)
+    var accentOpposite: Color {
+        switch accentPreset {
+        case .orange: return Color(red: 0.25, green: 0.55, blue: 0.95)   // blue
+        case .blue:   return Color(red: 1.00, green: 0.45, blue: 0.20)   // orange
+        case .indigo: return Color(red: 0.95, green: 0.75, blue: 0.15)   // gold
+        case .teal:   return Color(red: 0.92, green: 0.30, blue: 0.45)   // rose
+        case .green:  return Color(red: 0.62, green: 0.35, blue: 0.95)   // purple
+        case .pink:   return Color(red: 0.10, green: 0.72, blue: 0.55)   // teal
+        case .purple: return Color(red: 0.18, green: 0.72, blue: 0.40)   // green
+        case .red:    return Color(red: 0.10, green: 0.70, blue: 0.75)   // cyan
+        }
+    }
+    
+    var pageBackground: Color {
+        Color(UIColor { t in
+            t.userInterfaceStyle == .dark
+                ? UIColor(red: 0.07, green: 0.07, blue: 0.09, alpha: 1)
+                : UIColor(red: 0.95, green: 0.95, blue: 0.97, alpha: 1)
+        })
+    }
+    
     var cardBackground: Color {
-        Color(UIColor { trait in
-            trait.userInterfaceStyle == .dark
-                ? UIColor(red: 0.11, green: 0.12, blue: 0.14, alpha: 1)   // near-black card
-                : UIColor(red: 0.98, green: 0.98, blue: 0.99, alpha: 1)   // almost white
+        Color(UIColor { t in
+            t.userInterfaceStyle == .dark
+                ? UIColor(red: 0.12, green: 0.13, blue: 0.15, alpha: 1)
+                : UIColor.white
         })
     }
     
     var cardBorder: Color {
-        Color(UIColor { trait in
-            trait.userInterfaceStyle == .dark
+        Color(UIColor { t in
+            t.userInterfaceStyle == .dark
                 ? UIColor(white: 1, alpha: 0.08)
                 : UIColor(white: 0, alpha: 0.06)
         })
     }
     
-    var secondaryText: Color {
-        Color(UIColor.secondaryLabel)
-    }
-    
+    var secondaryText: Color { Color(UIColor.secondaryLabel) }
     var success: Color { Color(red: 0.18, green: 0.72, blue: 0.40) }
     var warning: Color { Color(red: 0.95, green: 0.65, blue: 0.15) }
     var danger:  Color { Color(red: 0.92, green: 0.28, blue: 0.28) }
+    
+    private init() {
+        let raw = defaults.string(forKey: "LCAccentPreset") ?? LCAccentPreset.orange.rawValue
+        self.accentPreset = LCAccentPreset(rawValue: raw) ?? .orange
+        
+        if defaults.object(forKey: "LCDoubleTapStatusBarToExit") == nil {
+            self.doubleTapStatusBarToExit = true
+        } else {
+            self.doubleTapStatusBarToExit = defaults.bool(forKey: "LCDoubleTapStatusBarToExit")
+        }
+        
+        let layoutRaw = defaults.string(forKey: "LCAppLayoutMode") ?? LCAppLayoutMode.list.rawValue
+        self.appLayout = LCAppLayoutMode(rawValue: layoutRaw) ?? .list
+    }
+    
+    func setAccent(_ preset: LCAccentPreset) {
+        accentPreset = preset
+    }
 }
 
-// MARK: - View helpers
+// MARK: - Modifiers
 
 struct LCCardModifier: ViewModifier {
-    @ObservedObject var theme = LCTheme.shared
+    @ObservedObject private var theme = LCTheme.shared
+    var radius: CGFloat = 16
     
     func body(content: Content) -> some View {
         content
             .background(theme.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: radius, style: .continuous)
                     .stroke(theme.cardBorder, lineWidth: 1)
             )
     }
 }
 
 extension View {
-    func lcCard() -> some View {
-        modifier(LCCardModifier())
+    func lcCard(radius: CGFloat = 16) -> some View {
+        modifier(LCCardModifier(radius: radius))
     }
 }

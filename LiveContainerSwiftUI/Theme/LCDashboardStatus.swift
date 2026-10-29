@@ -6,18 +6,21 @@
 //
 
 import Foundation
-import NetworkExtension
 import SwiftUI
 import Combine
 import Darwin
 
-// MARK: - Certificate Status
+#if canImport(NetworkExtension)
+import NetworkExtension
+#endif
+
+// MARK: - Certificate
 
 struct LCCertificateStatus {
     enum State {
         case notImported
         case valid(daysLeft: Int, expiration: Date, teamId: String?)
-        case expiringSoon(daysLeft: Int, expiration: Date, teamId: String?) // < 3 days
+        case expiringSoon(daysLeft: Int, expiration: Date, teamId: String?)
         case expired(expiration: Date, teamId: String?)
         case error(String)
     }
@@ -25,10 +28,8 @@ struct LCCertificateStatus {
     let state: State
     
     var isImported: Bool {
-        switch state {
-        case .notImported: return false
-        default: return true
-        }
+        if case .notImported = state { return false }
+        return true
     }
     
     var title: String {
@@ -42,24 +43,20 @@ struct LCCertificateStatus {
     }
     
     var subtitle: String {
+        let df = DateFormatter()
+        df.dateStyle = .medium
         switch state {
         case .notImported:
             return "Import a certificate to sign apps"
         case .valid(let days, let date, let team):
-            let formatter = DateFormatter()
-            formatter.dateStyle = .medium
-            let teamStr = team.map { " · \($0)" } ?? ""
-            return "\(days) day\(days == 1 ? "" : "s") left · \(formatter.string(from: date))\(teamStr)"
+            let t = team.map { " · \($0)" } ?? ""
+            return "\(days) day\(days == 1 ? "" : "s") left · \(df.string(from: date))\(t)"
         case .expiringSoon(let days, let date, let team):
-            let formatter = DateFormatter()
-            formatter.dateStyle = .medium
-            let teamStr = team.map { " · \($0)" } ?? ""
-            return "\(days) day\(days == 1 ? "" : "s") left · \(formatter.string(from: date))\(teamStr)"
+            let t = team.map { " · \($0)" } ?? ""
+            return "\(days) day\(days == 1 ? "" : "s") left · \(df.string(from: date))\(t)"
         case .expired(let date, let team):
-            let formatter = DateFormatter()
-            formatter.dateStyle = .medium
-            let teamStr = team.map { " · \($0)" } ?? ""
-            return "Expired \(formatter.string(from: date))\(teamStr)"
+            let t = team.map { " · \($0)" } ?? ""
+            return "Expired \(df.string(from: date))\(t)"
         case .error(let msg):
             return msg
         }
@@ -76,7 +73,7 @@ struct LCCertificateStatus {
     }
 }
 
-// MARK: - LocalDevVPN Status
+// MARK: - LocalDevVPN
 
 struct LCLocalDevVPNStatus {
     enum State {
@@ -87,7 +84,6 @@ struct LCLocalDevVPNStatus {
     }
     
     let state: State
-    
     var isConnected: Bool { state == .connected }
     
     var title: String {
@@ -119,32 +115,31 @@ struct LCLocalDevVPNStatus {
     }
 }
 
-// MARK: - Status Manager
+// MARK: - Manager
 
 @MainActor
 final class LCDashboardStatusManager: ObservableObject {
     static let shared = LCDashboardStatusManager()
     
     @Published var certificate = LCCertificateStatus(state: .notImported)
-    @Published var localDevVPN = LCLocalDevVPNStatus(state: .unknown)
+    @Published var localDevVPN = LCLocalDevVPNStatus(state: .disconnected)
     
     private var vpnObserver: NSObjectProtocol?
-    private var refreshTask: Task<Void, Never>?
+    private var pollTask: Task<Void, Never>?
     
-    // Official LocalDevVPN identifiers
-    private let localDevVPNBundleId = "com.jkcoxson.LocalDevVPN"
-    private let localDevVPNTunnelId = "com.jkcoxson.LocalDevVPN.TunnelProv"
+    private let localDevBundle = "com.jkcoxson.LocalDevVPN"
+    private let localDevTunnel = "com.jkcoxson.LocalDevVPN.TunnelProv"
     
-    init() {
+    private init() {
         refresh()
-        startObservation()
+        startPolling()
     }
     
     deinit {
         if let vpnObserver {
             NotificationCenter.default.removeObserver(vpnObserver)
         }
-        refreshTask?.cancel()
+        pollTask?.cancel()
     }
     
     func refresh() {
@@ -161,7 +156,8 @@ final class LCDashboardStatusManager: ObservableObject {
             return
         }
         
-        _ = LCUtils.validateCertificate { [weak self] (status: Int32, expirationDate: Date?, organizationalUnitName: String?, error: String?) in
+        // Match existing call site style in LCJITLessDiagnoseView
+        LCUtils.validateCertificate { [weak self] status, date, ou, error in
             Task { @MainActor in
                 guard let self else { return }
                 
@@ -170,32 +166,40 @@ final class LCDashboardStatusManager: ObservableObject {
                     return
                 }
                 
-                guard let expirationDate else {
+                guard let date else {
                     if status == 0 {
-                        self.certificate = LCCertificateStatus(state: .valid(daysLeft: 7, expiration: Date().addingTimeInterval(7*86400), teamId: organizationalUnitName))
+                        let fallback = Date().addingTimeInterval(7 * 86400)
+                        self.certificate = LCCertificateStatus(
+                            state: .valid(daysLeft: 7, expiration: fallback, teamId: ou)
+                        )
                     } else {
-                        self.certificate = LCCertificateStatus(state: .error("Unable to read certificate expiry"))
+                        self.certificate = LCCertificateStatus(
+                            state: .error("Unable to read certificate expiry")
+                        )
                     }
                     return
                 }
                 
-                let days = Calendar.current.dateComponents([.day], from: Date(), to: expirationDate).day ?? 0
-                let team = organizationalUnitName
-                
+                let days = Calendar.current.dateComponents([.day], from: Date(), to: date).day ?? 0
                 if days < 0 {
-                    self.certificate = LCCertificateStatus(state: .expired(expiration: expirationDate, teamId: team))
+                    self.certificate = LCCertificateStatus(state: .expired(expiration: date, teamId: ou))
                 } else if days < 3 {
-                    self.certificate = LCCertificateStatus(state: .expiringSoon(daysLeft: max(days, 0), expiration: expirationDate, teamId: team))
+                    self.certificate = LCCertificateStatus(
+                        state: .expiringSoon(daysLeft: max(days, 0), expiration: date, teamId: ou)
+                    )
                 } else {
-                    self.certificate = LCCertificateStatus(state: .valid(daysLeft: days, expiration: expirationDate, teamId: team))
+                    self.certificate = LCCertificateStatus(
+                        state: .valid(daysLeft: days, expiration: date, teamId: ou)
+                    )
                 }
             }
         }
     }
     
-    // MARK: LocalDevVPN detection
+    // MARK: LocalDevVPN
     
-    private func startObservation() {
+    private func startPolling() {
+        #if canImport(NetworkExtension)
         vpnObserver = NotificationCenter.default.addObserver(
             forName: .NEVPNStatusDidChange,
             object: nil,
@@ -205,8 +209,9 @@ final class LCDashboardStatusManager: ObservableObject {
                 self?.refreshLocalDevVPN()
             }
         }
+        #endif
         
-        refreshTask = Task { [weak self] in
+        pollTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 2_500_000_000)
                 await MainActor.run {
@@ -217,28 +222,23 @@ final class LCDashboardStatusManager: ObservableObject {
     }
     
     private func refreshLocalDevVPN() {
-        // Primary: detect LocalDevVPN tunnel by interface + 10.7.x.x address
-        // (does not require Network Extension entitlement)
+        // Primary: utun interface with 10.7.x.x (LocalDevVPN tunnel range)
         if hasLocalDevVPNInterface() {
             localDevVPN = LCLocalDevVPNStatus(state: .connected)
             return
         }
         
-        // Secondary: try NEVPNManager / NETunnelProviderManager (best-effort)
+        #if canImport(NetworkExtension)
         NETunnelProviderManager.loadAllFromPreferences { [weak self] managers, _ in
             Task { @MainActor in
                 guard let self else { return }
-                
                 if let managers {
-                    for manager in managers {
-                        if self.isLocalDevVPN(manager: manager) {
-                            self.localDevVPN = LCLocalDevVPNStatus(state: self.mapStatus(manager.connection.status))
-                            return
-                        }
+                    for manager in managers where self.isLocalDevVPN(manager) {
+                        self.localDevVPN = LCLocalDevVPNStatus(state: self.mapStatus(manager.connection.status))
+                        return
                     }
                 }
-                
-                // Re-check interface (race)
+                // Re-check interface (race with tunnel bring-up)
                 if self.hasLocalDevVPNInterface() {
                     self.localDevVPN = LCLocalDevVPNStatus(state: .connected)
                 } else {
@@ -246,12 +246,17 @@ final class LCDashboardStatusManager: ObservableObject {
                 }
             }
         }
+        #else
+        localDevVPN = LCLocalDevVPNStatus(state: .disconnected)
+        #endif
     }
     
-    /// Detect LocalDevVPN by looking for utun interfaces with 10.7.x.x addresses
+    /// LocalDevVPN creates a utun interface in the 10.7.0.0/16 range
     private func hasLocalDevVPNInterface() -> Bool {
         var ifaddr: UnsafeMutablePointer<ifaddrs>?
-        guard getifaddrs(&ifaddr) == 0, let first = ifaddr else { return false }
+        guard getifaddrs(&ifaddr) == 0, let first = ifaddr else {
+            return false
+        }
         defer { freeifaddrs(ifaddr) }
         
         var ptr: UnsafeMutablePointer<ifaddrs>? = first
@@ -259,25 +264,21 @@ final class LCDashboardStatusManager: ObservableObject {
             defer { ptr = current.pointee.ifa_next }
             
             let name = String(cString: current.pointee.ifa_name)
-            // LocalDevVPN uses utun*
             guard name.hasPrefix("utun") else { continue }
-            guard let addr = current.pointee.ifa_addr else { continue }
-            guard addr.pointee.sa_family == UInt8(AF_INET) else { continue }
+            guard let sa = current.pointee.ifa_addr, sa.pointee.sa_family == UInt8(AF_INET) else { continue }
             
-            var hostname = [CChar](repeating: 0, count: Int(NI_MAXHOST))
-            let result = getnameinfo(
-                addr,
-                socklen_t(addr.pointee.sa_len),
-                &hostname,
-                socklen_t(hostname.count),
+            var host = [CChar](repeating: 0, count: Int(NI_MAXHOST))
+            let rc = getnameinfo(
+                sa,
+                socklen_t(sa.pointee.sa_len),
+                &host,
+                socklen_t(host.count),
                 nil,
                 0,
                 NI_NUMERICHOST
             )
-            guard result == 0 else { continue }
-            let ip = String(cString: hostname)
-            
-            // LocalDevVPN default ranges: 10.7.0.x / 10.7.1.x
+            guard rc == 0 else { continue }
+            let ip = String(cString: host)
             if ip.hasPrefix("10.7.") {
                 return true
             }
@@ -285,20 +286,20 @@ final class LCDashboardStatusManager: ObservableObject {
         return false
     }
     
-    private func isLocalDevVPN(manager: NEVPNManager) -> Bool {
+    #if canImport(NetworkExtension)
+    private func isLocalDevVPN(_ manager: NEVPNManager) -> Bool {
         if let proto = manager.protocolConfiguration as? NETunnelProviderProtocol {
-            let providerId = proto.providerBundleIdentifier ?? ""
-            if providerId == localDevVPNTunnelId || providerId.hasPrefix(localDevVPNBundleId) {
+            let provider = proto.providerBundleIdentifier ?? ""
+            if provider == localDevTunnel || provider.hasPrefix(localDevBundle) {
                 return true
             }
             if let server = proto.serverAddress,
-               server.localizedCaseInsensitiveContains("LocalDevVPN") {
+               server.range(of: "LocalDevVPN", options: .caseInsensitive) != nil {
                 return true
             }
         }
         if let desc = manager.localizedDescription,
-           desc.localizedCaseInsensitiveContains("LocalDevVPN") ||
-           desc.localizedCaseInsensitiveContains("Local Dev VPN") {
+           desc.range(of: "LocalDevVPN", options: .caseInsensitive) != nil {
             return true
         }
         return false
@@ -312,6 +313,7 @@ final class LCDashboardStatusManager: ObservableObject {
         @unknown default: return .unknown
         }
     }
+    #endif
     
     func openLocalDevVPN() {
         if let url = URL(string: "localdevvpn://") {
