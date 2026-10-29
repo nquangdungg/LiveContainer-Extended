@@ -219,7 +219,6 @@ jobs:
               -${{ steps.proj.outputs.filetype }} "${{ steps.proj.outputs.file }}" \
               -sdk iphoneos \
               -destination "generic/platform=iOS" \
-              -arch arm64 \
               -configuration Release \
               MARKETING_VERSION="${{ steps.version.outputs.version }}" \
               CURRENT_PROJECT_VERSION="${{ steps.version.outputs.version }}" \
