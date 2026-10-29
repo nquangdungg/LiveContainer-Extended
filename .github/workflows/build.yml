@@ -85,7 +85,7 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
-      - name: Ensure submodules (OpenSSL / litehook / fishhook)
+      - name: Ensure OpenSSL + submodules
         run: |
           set -euo pipefail
 
@@ -98,123 +98,120 @@ jobs:
           mkdir -p OpenSSL/Frameworks
           curl -fsSL -o /tmp/OpenSSL.xcframework.zip \
             "https://github.com/krzyzanowskim/OpenSSL/releases/download/${OPENSSL_TAG}/OpenSSL.xcframework.zip"
+          rm -rf /tmp/openssl_extract
+          mkdir -p /tmp/openssl_extract
           unzip -qo /tmp/OpenSSL.xcframework.zip -d /tmp/openssl_extract
           rm -f /tmp/OpenSSL.xcframework.zip
           FOUND=$(find /tmp/openssl_extract -type d -name OpenSSL.xcframework | head -1)
           if [ -z "$FOUND" ]; then
-            echo "ERROR: OpenSSL.xcframework not found in zip"
+            echo "ERROR: OpenSSL.xcframework not found in release zip"
             find /tmp/openssl_extract | head -50
             exit 1
           fi
           mv "$FOUND" OpenSSL/Frameworks/OpenSSL.xcframework
           rm -rf /tmp/openssl_extract
 
-          # Strip vendor signatures so ProcessXCFramework cannot fail on signature mismatch
-          find OpenSSL/Frameworks/OpenSSL.xcframework -type d -name '_CodeSignature' -print -exec rm -rf {} + 2>/dev/null || true
+          find OpenSSL/Frameworks/OpenSSL.xcframework -type d -name '_CodeSignature' -exec rm -rf {} + 2>/dev/null || true
           find OpenSSL/Frameworks/OpenSSL.xcframework -name '*.signature' -delete 2>/dev/null || true
 
-          if [ ! -d OpenSSL/Frameworks/OpenSSL.xcframework/ios-arm64 ]; then
-            echo "ERROR: ios-arm64 slice missing"
-            ls -la OpenSSL/Frameworks/OpenSSL.xcframework
-            exit 1
-          fi
-          echo "OpenSSL.xcframework ready:"
+          test -d OpenSSL/Frameworks/OpenSSL.xcframework/ios-arm64
+          echo "OpenSSL.xcframework ready"
           ls OpenSSL/Frameworks/OpenSSL.xcframework
 
-          python3 - <<'PY2'
+          python3 - <<'PY'
           from pathlib import Path
           import re
           p = Path("LiveContainer.xcodeproj/project.pbxproj")
           t = p.read_text()
           t2 = re.sub(r'expectedSignature = "[^"]*";\s*', '', t)
-          t2 = t2.replace('OpenSSL/Frameworks/iphoneos/OpenSSL.framework', 'OpenSSL/Frameworks/OpenSSL.xcframework')
-          t2 = t2.replace('$(PROJECT_DIR)/OpenSSL/Frameworks/iphoneos', '$(PROJECT_DIR)/OpenSSL/Frameworks')
-          if t2 != t:
-              p.write_text(t2)
-              print("pbxproj patched (signature + search paths)")
-          else:
-              print("pbxproj unchanged")
-          PY2
+          t2 = t2.replace(
+              "OpenSSL/Frameworks/iphoneos/OpenSSL.framework",
+              "OpenSSL/Frameworks/OpenSSL.xcframework",
+          )
+          t2 = t2.replace(
+              "$(PROJECT_DIR)/OpenSSL/Frameworks/iphoneos",
+              "$(PROJECT_DIR)/OpenSSL/Frameworks",
+          )
+          p.write_text(t2)
+          print("pbxproj patched")
+          PY
 
           if [ ! -f litehook/litehook.c ] && [ ! -f litehook/README.md ]; then
             rm -rf litehook
             git clone --depth 1 https://github.com/LiveContainer/litehook.git litehook
           fi
-          if [ ! -f fishhook/fishhook.c ] && [ ! -d fishhook/fishhook.xcodeproj ]; then
+          if [ ! -f fishhook/fishhook.c ] && [ ! -d fishhook ]; then
             rm -rf fishhook
             git clone --depth 1 https://github.com/LiveContainer/fishhook.git fishhook || true
           fi
 
-      - name: Resolve version
-      - name: Resolve version
       - name: Resolve version (semver)
         id: version
         run: |
-          set -e
+          set -euo pipefail
           BASE="4.2.6"
           if [ -f VERSION ]; then BASE=$(tr -d '[:space:]' < VERSION); fi
-          if [ -f LiveContainer/Info.plist ]; then
-            PLIST_VER=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" LiveContainer/Info.plist 2>/dev/null || true)
-          fi
           LATEST_TAG=$(git tag -l 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -1 || true)
-          # Prefer latest git tag when present (source of truth on repo)
           if [ -n "$LATEST_TAG" ]; then BASE="${LATEST_TAG#v}"; fi
-          # VERSION file overrides tag only when workflow_dispatch sets explicit bump from it
           if [ -f VERSION ] && [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             BASE=$(tr -d '[:space:]' < VERSION)
           fi
           BUMP="${{ github.event.inputs.version_bump }}"
           if [ -z "$BUMP" ]; then BUMP="patch"; fi
-          if [ "${{ github.event_name }}" = "pull_request" ]; then BUMP="none"
-          elif [ "${{ github.event_name }}" = "push" ]; then BUMP="patch"
-          elif [ "${{ inputs.release_channel }}" = "nightly" ]; then BUMP="none"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BUMP="none"
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            BUMP="patch"
+          elif [ "${{ inputs.release_channel }}" = "nightly" ]; then
+            BUMP="none"
           fi
-          IFS=. read -r MAJ MIN PAT <<EOF
+          IFS=. read -r MA MI PA <<EOF
           $BASE
           EOF
-          MAJ=${MAJ:-4}; MIN=${MIN:-2}; PAT=${PAT:-6}
+          MA=${MA:-4}; MI=${MI:-2}; PA=${PA:-6}
           case "$BUMP" in
-            major) MAJ=$((MAJ+1)); MIN=0; PAT=0 ;;
-            minor) MIN=$((MIN+1)); PAT=0 ;;
-            patch) PAT=$((PAT+1)) ;;
+            major) MA=$((MA+1)); MI=0; PA=0 ;;
+            minor) MI=$((MI+1)); PA=0 ;;
+            patch) PA=$((PA+1)) ;;
             none) ;;
-            *) PAT=$((PAT+1)) ;;
+            *) PA=$((PA+1)) ;;
           esac
-          VER="${MAJ}.${MIN}.${PAT}"
-          echo "version=$VER" >> "$GITHUB_OUTPUT"
-          echo "$VER" > VERSION
-          echo "==> Version: $VER"
+          VER="${MA}.${MI}.${PA}"
+          if [ "${{ inputs.release_channel }}" = "nightly" ] || [ "${{ github.event_name }}" = "push" ]; then
+            SHORT=$(echo "${{ github.sha }}" | cut -c1-7)
+            VER="${VER}+${SHORT}"
+          fi
+          echo "version=${VER}" >> "$GITHUB_OUTPUT"
+          echo "Resolved version: ${VER}"
+          echo "${VER}" > VERSION
+          echo "LC_BUILD_VERSION=${VER}" >> "$GITHUB_ENV"
 
-      - name: Resolve project
+      - name: Detect project type
         id: proj
         run: |
-          if ls -A | grep -qi '\.xcworkspace$'; then
+          if ls *.xcworkspace 1>/dev/null 2>&1; then
             echo "filetype=workspace" >> "$GITHUB_OUTPUT"
-            echo "file=$(ls -A | grep -i '\.xcworkspace$' | head -1)" >> "$GITHUB_OUTPUT"
+            echo "file=$(ls -d *.xcworkspace | head -1)" >> "$GITHUB_OUTPUT"
           else
             echo "filetype=project" >> "$GITHUB_OUTPUT"
-            echo "file=$(ls -A | grep -i '\.xcodeproj$' | head -1)" >> "$GITHUB_OUTPUT"
+            echo "file=$(ls -d *.xcodeproj | head -1)" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Archive + Pack (retry until success)
+      - name: Archive + Pack (retry loop)
         id: pack
-        timeout-minutes: 100
+        env:
+          LC_BUILD_VERSION: ${{ steps.version.outputs.version }}
         run: |
           set -euo pipefail
           MAX="${{ github.event.inputs.max_build_attempts }}"
-          if [ -z "$MAX" ] || [ "$MAX" -lt 1 ]; then MAX=5; fi
-          chmod +x .github/build_github.sh
-          export LC_BUILD_VERSION="${{ steps.version.outputs.version }}"
-          echo "LC_BUILD_VERSION=$LC_BUILD_VERSION"
-
+          if [ -z "$MAX" ] || [ "$MAX" = "null" ]; then MAX=5; fi
+          scheme="${{ env.scheme }}"
+          archive_path="${{ env.archive_path }}"
           ATTEMPT=1
           while [ "$ATTEMPT" -le "$MAX" ]; do
-            echo ""
-            echo "========== BUILD ATTEMPT ${ATTEMPT}/${MAX} (commit ${GITHUB_SHA}) =========="
+            echo "========== BUILD ATTEMPT ${ATTEMPT}/${MAX} (commit ${{ github.sha }}) =========="
+            rm -rf "${archive_path}.xcarchive" "${scheme}.ipa" "${scheme}+SideStore.ipa" DerivedData || true
 
-            rm -rf "${archive_path}.xcarchive" Payload tmp
-
-            set +e
             set +e
             xcodebuild archive \
               -archivePath "$archive_path" \
@@ -236,42 +233,39 @@ jobs:
               > /tmp/xcodebuild_archive.log 2>&1
             XC_RC=$?
             set -e
-            grep -E "error:|ProcessXCFramework|fatal|ARCHIVE FAILED|failed" /tmp/xcodebuild_archive.log | tail -80 || true
+
             if [ "$XC_RC" -ne 0 ]; then
-              echo "---- last 120 lines of xcodebuild log ----"
-              tail -120 /tmp/xcodebuild_archive.log
-              exit "$XC_RC"
+              echo "Archive failed (rc=${XC_RC}) on attempt ${ATTEMPT}"
+              grep -E "error:|ProcessXCFramework|fatal|ARCHIVE FAILED|failed" /tmp/xcodebuild_archive.log | tail -60 || true
+              echo "---- last 80 lines ----"
+              tail -80 /tmp/xcodebuild_archive.log
+              if [ "$ATTEMPT" -eq "$MAX" ]; then
+                echo "ERROR: exhausted ${MAX} archive attempts"
+                exit 1
+              fi
+              ATTEMPT=$((ATTEMPT + 1))
+              sleep $((ATTEMPT * 15))
+              continue
             fi
             echo "Archive OK"
-            ARCHIVE_RC=${PIPESTATUS[0]}
-            set -e
 
-            if [ "$ARCHIVE_RC" -ne 0 ]; then
-              echo "Archive failed (rc=$ARCHIVE_RC) on attempt ${ATTEMPT}"
-              if [ "$ATTEMPT" -eq "$MAX" ]; then exit 1; fi
-              sleep $((ATTEMPT * 20))
+            set +e
+            LC_BUILD_VERSION="${{ steps.version.outputs.version }}" bash .github/build_github.sh
+            PACK_RC=$?
+            set -e
+            if [ "$PACK_RC" -ne 0 ] || [ ! -f "${scheme}.ipa" ]; then
+              echo "Pack failed (rc=${PACK_RC}) on attempt ${ATTEMPT}"
+              if [ "$ATTEMPT" -eq "$MAX" ]; then
+                echo "ERROR: exhausted ${MAX} pack attempts without ${scheme}.ipa"
+                exit 1
+              fi
               ATTEMPT=$((ATTEMPT + 1))
+              sleep $((ATTEMPT * 15))
               continue
             fi
 
-            set +e
-            sh .github/build_github.sh
-            PACK_RC=$?
-            set -e
-
-            if [ -f "${scheme}.ipa" ]; then
-              echo "==> SUCCESS on attempt ${ATTEMPT}: LiveContainer.ipa ready"
-              ls -lh *.ipa || true
-              break
-            fi
-
-            echo "Pack failed (rc=$PACK_RC) — no LiveContainer.ipa on attempt ${ATTEMPT}"
-            if [ "$ATTEMPT" -eq "$MAX" ]; then
-              echo "ERROR: exhausted ${MAX} attempts without LiveContainer.ipa"
-              exit 1
-            fi
-            sleep $((ATTEMPT * 20))
-            ATTEMPT=$((ATTEMPT + 1))
+            echo "Pack OK: $(ls -lh "${scheme}.ipa")"
+            break
           done
 
           if [ -f "${scheme}+SideStore.ipa" ]; then
@@ -351,6 +345,11 @@ jobs:
               TAG="${TAG}-$(date -u +%Y%m%d%H%M)"
             fi
           fi
+          SUMMARY="${{ inputs.summary }}"
+          FEATURES="${{ inputs.features }}"
+          IMPROVEMENTS="${{ inputs.improvements }}"
+          BUGFIXES="${{ inputs.bug_fixes }}"
+          NOTES="${{ inputs.notes }}"
           {
             echo "# LiveContainer Extended ${VER}"
             echo ""
@@ -359,46 +358,33 @@ jobs:
             echo "| **LiveContainer Extended** | \`${VER}\` |"
             echo "| **Embedded SideStore**     | \`${SS}\` |"
             echo ""
-            echo ""
-            echo "> [!Warning]"
-            echo "> Standalone build needs **SideStore 0.6.2+** or **AltStore 2.2.1+**."
-            echo "> For \`LiveContainer+SideStore.ipa\` use [Impactor](https://github.com/khcrysalis/Impactor) or [iloader](https://github.com/nab138/iloader)."
-            echo ""
+            if [ -n "$(printf '%s' "$SUMMARY" | tr -d '[:space:]')" ]; then
+              echo "## Summary"
+              echo "$SUMMARY"
+              echo ""
+            fi
             echo "## New Features"
-            echo ""
-            FEATURES="${{ inputs.features }}"
             if [ -n "$(printf '%s' "$FEATURES" | tr -d '[:space:]')" ]; then
-              printf '%s\n' "$FEATURES" | sed '/^[[:space:]]*$/d' | sed 's/^/- /'
+              printf '%s\n' "$FEATURES"
             else
-              echo "- (none listed)"
+              echo "-"
             fi
             echo ""
             echo "## Improvements"
-            echo ""
-            IMPROVEMENTS="${{ inputs.improvements }}"
             if [ -n "$(printf '%s' "$IMPROVEMENTS" | tr -d '[:space:]')" ]; then
-              printf '%s\n' "$IMPROVEMENTS" | sed '/^[[:space:]]*$/d' | sed 's/^/- /'
+              printf '%s\n' "$IMPROVEMENTS"
             else
-              echo "- (none listed)"
+              echo "-"
             fi
             echo ""
             echo "## Bug Fixes"
-            echo ""
-            BUGFIXES="${{ inputs.bug_fixes }}"
             if [ -n "$(printf '%s' "$BUGFIXES" | tr -d '[:space:]')" ]; then
-              printf '%s\n' "$BUGFIXES" | sed '/^[[:space:]]*$/d' | sed 's/^/- /'
+              printf '%s\n' "$BUGFIXES"
             else
-              echo "- (none listed)"
+              echo "-"
             fi
             echo ""
             echo "## Notes"
-            echo ""
-            NOTES="${{ inputs.notes }}"
-            SUMMARY="${{ inputs.summary }}"
-            if [ -n "$(printf '%s' "$SUMMARY" | tr -d '[:space:]')" ]; then
-              printf '%s\n' "$SUMMARY"
-              echo ""
-            fi
             if [ -n "$(printf '%s' "$NOTES" | tr -d '[:space:]')" ]; then
               printf '%s\n' "$NOTES"
             else
