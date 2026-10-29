@@ -85,6 +85,27 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
+      - name: Ensure submodules (OpenSSL / litehook / fishhook)
+        run: |
+          set -euo pipefail
+          git submodule sync --recursive
+          git submodule update --init --recursive --force
+          echo "==> Submodule status:"
+          git submodule status --recursive || true
+          if [ ! -d OpenSSL/Frameworks/OpenSSL.xcframework ]; then
+            echo "OpenSSL.xcframework missing after submodule update — cloning krzyzanowskim/OpenSSL"
+            rm -rf OpenSSL
+            git clone --depth 1 https://github.com/krzyzanowskim/OpenSSL.git OpenSSL
+          fi
+          if [ ! -d OpenSSL/Frameworks/OpenSSL.xcframework ]; then
+            echo "ERROR: OpenSSL/Frameworks/OpenSSL.xcframework still missing"
+            ls -la OpenSSL || true
+            ls -la OpenSSL/Frameworks || true
+            exit 1
+          fi
+          echo "OpenSSL.xcframework OK"
+          ls -la OpenSSL/Frameworks/OpenSSL.xcframework | head
+
       - name: Resolve version (semver)
         id: version
         run: |
