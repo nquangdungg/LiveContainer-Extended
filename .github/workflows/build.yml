@@ -145,6 +145,32 @@ jobs:
             git clone --depth 1 https://github.com/LiveContainer/fishhook.git fishhook || true
           fi
 
+
+      - name: Verify critical sources not empty
+        run: |
+          set -euo pipefail
+          FAIL=0
+          for f in \
+            MultitaskSupport/UIKitPrivate+MultitaskSupport.h \
+            LiveContainer/Tweaks/NSBundle+FixCydiaSubstrate.m \
+            LiveContainer/Tweaks/NSFileManager+GuestHooks.m \
+            LiveContainer/Tweaks/NSURLSessionConfiguration+GuestHooks.m \
+            TweakLoader/UIKit+GuestHooks.m \
+            LiveContainer/UIKitPrivate.h \
+            LiveContainer/FoundationPrivate.h
+          do
+            if [ ! -s "$f" ]; then
+              echo "EMPTY OR MISSING: $f"
+              FAIL=1
+            else
+              echo "OK $f ($(wc -c < "$f") bytes)"
+            fi
+          done
+          if [ "$FAIL" -ne 0 ]; then
+            echo "Critical source files are empty — restore from upstream before building"
+            exit 1
+          fi
+
       - name: Resolve version (semver)
         id: version
         run: |
