@@ -27,10 +27,10 @@ struct LCSpringBoardShellView: View {
     private var appsByKey: [String: LCAppModel] {
         var map: [String: LCAppModel] = [:]
         for app in sharedModel.apps {
-            let k1 = app.appInfo.relativeBundlePath
-            let k2 = app.bundleIdentifier
-            if !k1.isEmpty { map[k1] = app }
-            if !k2.isEmpty { map[k2] = app }
+            let rel = app.appInfo.relativeBundlePath ?? ""
+            let bid = app.bundleIdentifier ?? ""
+            if !rel.isEmpty { map[rel] = app }
+            if !bid.isEmpty { map[bid] = app }
         }
         return map
     }
@@ -99,13 +99,16 @@ struct LCSpringBoardShellView: View {
             layout.reconcile(with: sharedModel.apps)
             if layout.dock.isEmpty {
                 // Seed dock with first up to 4 apps
-                layout.dock = Array(sharedModel.apps.prefix(4).map {
-                    $0.appInfo.relativeBundlePath ?? $0.bundleIdentifier
+                layout.dock = Array(sharedModel.apps.prefix(4).compactMap { app -> String? in
+                    let rel = app.appInfo.relativeBundlePath ?? ""
+                    let bid = app.bundleIdentifier ?? ""
+                    let key = rel.isEmpty ? bid : rel
+                    return key.isEmpty ? nil : key
                 })
                 if layout.pages.first?.isEmpty == true {
                     let dockSet = Set(layout.dock)
                     layout.pages = [sharedModel.apps.compactMap { app -> String? in
-                        let k = (app.appInfo.relativeBundlePath.isEmpty ? app.bundleIdentifier : app.appInfo.relativeBundlePath)
+                        let k = ((app.appInfo.relativeBundlePath ?? "").isEmpty ? (app.bundleIdentifier ?? "") : (app.appInfo.relativeBundlePath ?? ""))
                         return dockSet.contains(k) ? nil : k
                     }]
                 }
@@ -309,7 +312,7 @@ struct LCSpringBoardShellView: View {
     }
     
     private func launch(_ app: LCAppModel) {
-        let key = (app.appInfo.relativeBundlePath.isEmpty ? app.bundleIdentifier : app.appInfo.relativeBundlePath)
+        let key = ((app.appInfo.relativeBundlePath ?? "").isEmpty ? (app.bundleIdentifier ?? "") : (app.appInfo.relativeBundlePath ?? ""))
         launchingId = key
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
             launchScale = 1.08
@@ -394,7 +397,7 @@ struct LCSpringBoardSearchView: View {
         guard !q.isEmpty else { return apps }
         return apps.filter {
             $0.displayName.lowercased().contains(q) ||
-            $0.bundleIdentifier.lowercased().contains(q)
+            ($0.bundleIdentifier ?? "").lowercased().contains(q)
         }
     }
     
@@ -420,7 +423,7 @@ struct LCSpringBoardSearchView: View {
                 
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 10) {
-                        ForEach(filtered, id: \.bundleIdentifier) { app in
+                        ForEach(Array(filtered.enumerated()), id: \.offset) { _, app in
                             Button {
                                 onLaunch(app)
                                 onDismiss()
@@ -429,7 +432,7 @@ struct LCSpringBoardSearchView: View {
                                     Text(app.displayName)
                                         .foregroundStyle(.primary)
                                     Spacer()
-                                    Text(app.bundleIdentifier)
+                                    Text(app.bundleIdentifier ?? "")
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
                                         .lineLimit(1)
@@ -470,7 +473,7 @@ struct LCSpringBoardSwitcherView: View {
                     .foregroundStyle(.white)
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 14) {
-                        ForEach(apps.prefix(12), id: \.bundleIdentifier) { app in
+                        ForEach(Array(apps.prefix(12).enumerated()), id: \.offset) { _, app in
                             Button {
                                 onSelect(app)
                             } label: {

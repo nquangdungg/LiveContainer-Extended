@@ -66,7 +66,9 @@ final class LCSpringBoardLayoutStore: ObservableObject {
         let known = Set(pages.flatMap { $0 } + dock + folders.flatMap { $0.appBundleIds })
         var changed = false
         for app in apps {
-            let key = (app.appInfo.relativeBundlePath.isEmpty ? app.bundleIdentifier : app.appInfo.relativeBundlePath)
+            let rel = app.appInfo.relativeBundlePath ?? ""
+            let bid = app.bundleIdentifier ?? ""
+            let key = rel.isEmpty ? bid : rel
             guard !key.isEmpty, !known.contains(key) else { continue }
             if pages.isEmpty { pages = [[]] }
             pages[pages.count - 1].append(key)
