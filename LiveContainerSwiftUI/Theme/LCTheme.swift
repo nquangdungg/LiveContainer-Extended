@@ -84,6 +84,22 @@ final class LCTheme: ObservableObject {
         }
     }
     
+    /// Full SpringBoard home shell. Applied only after app relaunch.
+    @Published var springBoardShellEnabled: Bool {
+        didSet {
+            defaults.set(springBoardShellEnabled, forKey: "LCSpringBoardShellEnabled")
+        }
+    }
+    
+    /// Pending shell preference written before restart.
+    static func setSpringBoardShellPending(_ enabled: Bool) {
+        LCUtils.appGroupUserDefault.set(enabled, forKey: "LCSpringBoardShellEnabled")
+    }
+    
+    static var isSpringBoardShellEnabled: Bool {
+        LCUtils.appGroupUserDefault.bool(forKey: "LCSpringBoardShellEnabled")
+    }
+    
     var accent: Color { accentPreset.color }
     
     /// Rough complementary color for secondary tags (English "Fork", etc.)
@@ -138,6 +154,7 @@ final class LCTheme: ObservableObject {
         } else {
             self.doubleTapStatusBarToExit = defaults.bool(forKey: "LCDoubleTapStatusBarToExit")
         }
+        self.springBoardShellEnabled = defaults.bool(forKey: "LCSpringBoardShellEnabled")
         
         let layoutRaw = defaults.string(forKey: "LCAppLayoutMode") ?? LCAppLayoutMode.list.rawValue
         self.appLayout = LCAppLayoutMode(rawValue: layoutRaw) ?? .list

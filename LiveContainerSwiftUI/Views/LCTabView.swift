@@ -27,6 +27,10 @@ struct LCTabView: View {
     
     var body: some View {
         ZStack {
+        if LCTheme.isSpringBoardShellEnabled {
+            LCSpringBoardShellView()
+                .environmentObject(sharedModel)
+        } else {
         TabView(selection: $sharedModel.selectedTab) {
             if DataManager.shared.model.multiLCStatus != 2 {
                 LCSourcesView()
@@ -55,6 +59,7 @@ struct LCTabView: View {
                 .tag(LCTabIdentifier.settings)
         }
         .tint(theme.accent)
+        } // end classic TabView (non-SpringBoard)
         if appearanceEffects.effect == .snow {
             LCSnowOverlay()
                 .zIndex(5)

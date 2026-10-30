@@ -70,6 +70,7 @@ struct LCSettingsView: View {
     
     @EnvironmentObject private var sharedModel : SharedModel
     @ObservedObject private var theme = LCTheme.shared
+    @State private var restartAlert = false
     @ObservedObject private var developerMode = LCDeveloperMode.shared
     @ObservedObject private var appearanceEffects = LCAppearanceEffects.shared
     @State private var confirmDevMode = false
@@ -299,12 +300,27 @@ struct LCSettingsView: View {
                         }
                     }
                     Toggle(isOn: $theme.doubleTapStatusBarToExit) {
-                        Text("Tap status bar (clock) to exit app")
+                        Text("Tap status bar once to exit app")
                     }
                 } header: {
                     Text("Appearance")
                 } footer: {
                     Text("Accent applies instantly. Layout changes the Apps tab (List / Grid / Compact / SpringBoard).")
+                }
+                Section {
+                    Toggle(isOn: Binding(
+                        get: { theme.springBoardShellEnabled },
+                        set: { newValue in
+                            theme.springBoardShellEnabled = newValue
+                            restartAlert = true
+                        }
+                    )) {
+                        Text("SpringBoard Mode")
+                    }
+                } header: {
+                    Text("Home Screen")
+                } footer: {
+                    Text("Full-screen SpringBoard home (pages, dock, folders, search, switcher). Changing this requires restarting LiveContainer.")
                 }
                 Section{
                     Toggle(isOn: $frameShortIcon) {
@@ -401,7 +417,19 @@ struct LCSettingsView: View {
                 } footer: {
                     Text("Unlocks custom guest icons, Info.plist editor, and other advanced tools. Enabling requires an app restart.")
                 }
-                .alert("Enable Developer Mode?", isPresented: $confirmDevMode) {
+                .alert("Restart Required", isPresented: $restartAlert) {
+                Button("Restart Now") {
+                    LCTheme.setSpringBoardShellPending(theme.springBoardShellEnabled)
+                    // Hard exit so user relaunches into the new shell mode.
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        exit(0)
+                    }
+                }
+                Button("Later", role: .cancel) {}
+            } message: {
+                Text("SpringBoard Mode changes apply after LiveContainer fully restarts.")
+            }
+            .alert("Enable Developer Mode?", isPresented: $confirmDevMode) {
                     Button("Cancel", role: .cancel) {}
                     Button("Enable & Restart", role: .destructive) {
                         developerMode.requestEnableAndRestart()

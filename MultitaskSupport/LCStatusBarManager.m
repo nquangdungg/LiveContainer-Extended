@@ -74,11 +74,8 @@ static BOOL LCTapIsOnClockSide(UIAction *action) {
         [self lc_forwardSingleTap:action];
         return;
     }
-    if (!LCTapIsOnClockSide(action)) {
-        [self lc_forwardSingleTap:action];
-        return;
-    }
-    // One-tap exit (clock region)
+    // One-tap exit: any status-bar tap while a guest scene is active.
+    // (Clock-side filter removed — user requested single tap to leave.)
     if (LCPendingSingleTapBlock) {
         dispatch_block_cancel(LCPendingSingleTapBlock);
         LCPendingSingleTapBlock = nil;
