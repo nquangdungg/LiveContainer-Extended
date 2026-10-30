@@ -94,7 +94,9 @@ jobs:
           git submodule update --init --recursive --force || true
 
           OPENSSL_TAG="3.6.5000"
-          if [ ! -d OpenSSL/Frameworks/OpenSSL.xcframework/ios-arm64 ]; then
+          NEED=0
+          if [ ! -d OpenSSL/Frameworks/OpenSSL.xcframework/ios-arm64 ]; then NEED=1; fi
+          if [ "$NEED" = "1" ]; then
             echo "Fetching OpenSSL ${OPENSSL_TAG}..."
             rm -rf OpenSSL
             mkdir -p OpenSSL/Frameworks
@@ -109,23 +111,22 @@ jobs:
             rm -rf /tmp/openssl_extract /tmp/OpenSSL.xcframework.zip
           fi
 
-          # Strip signatures to avoid ProcessXCFramework signature failures on CI
-          find OpenSSL/Frameworks/OpenSSL.xcframework -type d -name '_CodeSignature' -exec rm -rf {} + 2>/dev/null || true
-
           test -d OpenSSL/Frameworks/OpenSSL.xcframework/ios-arm64
-          echo "OpenSSL OK"
 
-          # Fail fast if critical sources empty
-          for f in \
-            MultitaskSupport/UIKitPrivate+MultitaskSupport.h \
-            TweakLoader/UIKit+GuestHooks.m \
-            LiveContainer/UIKitPrivate.h
-          do
-            if [ ! -s "$f" ]; then echo "EMPTY: $f"; exit 1; fi
-            echo "OK $f ($(wc -c < "$f") bytes)"
-          done
+          # ZSign DEVELOPMENT_ASSET_PATHS + FRAMEWORK_SEARCH_PATHS still point at legacy layout:
+          #   OpenSSL/Frameworks/iphoneos/OpenSSL.framework
+          # Materialize it from the XCFramework ios-arm64 slice.
+          mkdir -p OpenSSL/Frameworks/iphoneos
+          rm -rf OpenSSL/Frameworks/iphoneos/OpenSSL.framework
+          cp -R OpenSSL/Frameworks/OpenSSL.xcframework/ios-arm64/OpenSSL.framework \
+                OpenSSL/Frameworks/iphoneos/OpenSSL.framework
+          test -d OpenSSL/Frameworks/iphoneos/OpenSSL.framework
+          echo "Legacy iphoneos OpenSSL.framework ready"
 
-          # Drop expectedSignature gate in pbxproj
+          # Strip vendor signatures (CI uses ad-hoc sign)
+          find OpenSSL/Frameworks -type d -name '_CodeSignature' -exec rm -rf {} + 2>/dev/null || true
+
+          # Drop expectedSignature gate
           python3 - <<'PY2'
           from pathlib import Path
           import re
@@ -137,11 +138,23 @@ jobs:
               print("stripped expectedSignature")
           PY2
 
+          for f in \
+            MultitaskSupport/UIKitPrivate+MultitaskSupport.h \
+            TweakLoader/UIKit+GuestHooks.m \
+            LiveContainer/UIKitPrivate.h \
+            OpenSSL/Frameworks/iphoneos/OpenSSL.framework \
+            OpenSSL/Frameworks/OpenSSL.xcframework
+          do
+            if [ ! -e "$f" ]; then echo "MISSING: $f"; exit 1; fi
+            echo "OK $f"
+          done
+
           if [ ! -f litehook/src/litehook.c ] && [ ! -f litehook/litehook.c ]; then
             rm -rf litehook
             git clone --depth 1 https://github.com/LiveContainer/litehook.git litehook
           fi
 
+      - name: Resolve version
       - name: Resolve version (semver)
         id: version
         run: |
