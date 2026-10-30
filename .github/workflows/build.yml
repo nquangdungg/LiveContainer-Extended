@@ -154,7 +154,6 @@ jobs:
             git clone --depth 1 https://github.com/LiveContainer/litehook.git litehook
           fi
 
-      - name: Resolve version
       - name: Resolve version (semver)
         id: version
         run: |
