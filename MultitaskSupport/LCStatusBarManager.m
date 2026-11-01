@@ -1,3 +1,4 @@
+#import <AudioToolbox/AudioToolbox.h>
 //
 //  LCStatusBarManager.m
 //  LiveContainer — ONE tap status bar / fake bar exit
@@ -31,6 +32,8 @@ static BOOL LCExitOnStatusBarTapEnabled(void) {
 }
 
 static void LCHapticTap(void) {
+    AudioServicesPlaySystemSound(1519);
+    AudioServicesPlaySystemSound(1520);
     UIImpactFeedbackGenerator *gen =
         [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleHeavy];
     [gen prepare];
@@ -46,7 +49,10 @@ static void LCHapticTap(void) {
     }
     // Exactly one tap → haptic → exit. No debounce, no second-tap window.
     LCHapticTap();
-    [self lc_exitGuest];
+    __weak typeof(self) weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.08 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [weakSelf lc_exitGuest];
+    });
 }
 
 - (void)lc_forwardSingleTap:(UIAction *)action {

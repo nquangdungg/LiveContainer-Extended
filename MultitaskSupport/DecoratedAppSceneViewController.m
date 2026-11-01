@@ -7,6 +7,7 @@
 #import "VirtualWindowsHostView.h"
 #import "../LiveContainer/Localization.h"
 #import "utils.h"
+#import <AudioToolbox/AudioToolbox.h>
 
 // MARK: - Inline fake status bar (kept in this TU so it always links)
 @interface LCFakeStatusBarView : UIView
@@ -100,19 +101,17 @@
     self.batteryIcon.image = [UIImage systemImageNamed:batName];
 }
 - (void)handleTap {
-    // Heavy impact so exit feedback is obvious on device
+    // Prefer system peek/pop haptics — more reliable than UIImpact in some contexts
+    AudioServicesPlaySystemSound(1519); // Peek
+    AudioServicesPlaySystemSound(1520); // Pop (stronger on supported devices)
     UIImpactFeedbackGenerator *gen = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleHeavy];
     [gen prepare];
     [gen impactOccurred];
-    if (@available(iOS 13.0, *)) {
-        UIImpactFeedbackGenerator *soft = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleSoft];
-        [soft impactOccurred];
-    }
-    if (self.onTapExit) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            self.onTapExit();
-        });
-    }
+    void (^exitBlock)(void) = self.onTapExit;
+    // Delay terminate so the haptic engine can fire before process tears down UI
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.08 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        if (exitBlock) exitBlock();
+    });
 }
 - (void)dealloc { [self stopUpdating]; }
 @end

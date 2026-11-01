@@ -4,6 +4,7 @@
 //
 //  Created by s s on 2025/5/17.
 //
+#import <AudioToolbox/AudioToolbox.h>
 #import "AppSceneViewController.h"
 #import "DecoratedAppSceneViewController.h"
 #import "LiveContainerSwiftUI-Swift.h"
@@ -408,10 +409,15 @@
 }
 
 - (void)handleStatusBarTapAction:(UIAction *)action {
+    AudioServicesPlaySystemSound(1519);
+    AudioServicesPlaySystemSound(1520);
     UIImpactFeedbackGenerator *gen = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleHeavy];
     [gen prepare];
     [gen impactOccurred];
-    [self terminate];
+    __weak typeof(self) weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.08 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [weakSelf terminate];
+    });
 }
 
 - (BOOL)usesHostingControllerAPI {

@@ -186,10 +186,11 @@
     // check if icon is cached on disk
     UIImage* uiIcon;
     NSString* cachedIconPath;
+    // V2 cache: regenerated without the white border plate
     if(isDarkIcon) {
-        cachedIconPath = [_bundlePath stringByAppendingPathComponent:@"LCAppIconDark.png"];
+        cachedIconPath = [_bundlePath stringByAppendingPathComponent:@"LCAppIconDarkV2.png"];
     } else {
-        cachedIconPath = [_bundlePath stringByAppendingPathComponent:@"LCAppIconLight.png"];
+        cachedIconPath = [_bundlePath stringByAppendingPathComponent:@"LCAppIconLightV2.png"];
     }
     NSURL* cachedIconUrl = [NSURL fileURLWithPath:cachedIconPath];
     
@@ -200,7 +201,7 @@
     
     // generate and save icon cache to disk
     if(!uiIcon) {
-        uiIcon = [UIImage generateIconForBundleURL:[NSURL fileURLWithPath:_bundlePath] style:isDarkIcon hasBorder:YES];
+        uiIcon = [UIImage generateIconForBundleURL:[NSURL fileURLWithPath:_bundlePath] style:isDarkIcon hasBorder:NO];
         saveCGImage([uiIcon CGImage], cachedIconUrl);
     }
     
@@ -218,8 +219,12 @@
 - (void)clearIconCache {
     NSString* lightModeIconPath = [_bundlePath stringByAppendingPathComponent:@"LCAppIconLight.png"];
     NSString* darkModeIconPath = [_bundlePath stringByAppendingPathComponent:@"LCAppIconDark.png"];
+    NSString* lightV2 = [_bundlePath stringByAppendingPathComponent:@"LCAppIconLightV2.png"];
+    NSString* darkV2 = [_bundlePath stringByAppendingPathComponent:@"LCAppIconDarkV2.png"];
     [NSFileManager.defaultManager removeItemAtPath:lightModeIconPath error:nil];
     [NSFileManager.defaultManager removeItemAtPath:darkModeIconPath error:nil];
+    [NSFileManager.defaultManager removeItemAtPath:lightV2 error:nil];
+    [NSFileManager.defaultManager removeItemAtPath:darkV2 error:nil];
     [self setCachedColor:nil];
     [self setCachedColorDark:nil];
     _cachedIcon = nil;

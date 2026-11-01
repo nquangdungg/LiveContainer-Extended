@@ -1,12 +1,18 @@
 import UIKit
 import SwiftUI
 import Intents
+import UserNotifications
 
-@objc class AppDelegate: UIResponder, UIApplicationDelegate {
+@objc class AppDelegate: UIResponder, UIApplicationDelegate, UNUserNotificationCenterDelegate {
         
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? ) -> Bool {
         application.shortcutItems = nil
         UserDefaults.standard.removeObject(forKey: "LCNeedToAcquireJIT")
+        
+        // Host receives guest-tagged local notifications and routes taps to the guest app.
+        let center = UNUserNotificationCenter.current()
+        center.delegate = self
+        center.requestAuthorization(options: [.alert, .badge, .sound]) { _, _ in }
         
         NotificationCenter.default.addObserver(forName: UIApplication.willTerminateNotification, object: nil, queue: .main) { _ in
             // Fix launching app if user opens JIT waiting dialog and kills the app. Won't trigger normally.
@@ -83,6 +89,47 @@ class SceneDelegate: NSObject, UIWindowSceneDelegate, ObservableObject { // Make
     }
     
 }
+
+
+    // MARK: - UNUserNotificationCenterDelegate (guest routing)
+
+    public func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        if #available(iOS 14.0, *) {
+            completionHandler([.banner, .sound, .badge, .list])
+        } else {
+            completionHandler([.alert, .sound, .badge])
+        }
+    }
+
+    public func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
+        let info = response.notification.request.content.userInfo
+        // Prefer explicit launch URL stamped by guest hook
+        if let urlStr = info["LCLaunchURL"] as? String, let url = URL(string: urlStr) {
+            DispatchQueue.main.async {
+                UIApplication.shared.open(url, options: [:], completionHandler: nil)
+            }
+            completionHandler()
+            return
+        }
+        let guest = (info["LCGuestBundleId"] as? String) ?? (info["LCGuestAppId"] as? String)
+        if let guest, !guest.isEmpty {
+            // Build livecontainer-launch URL using host scheme
+            let scheme = (Bundle.main.infoDictionary?["CFBundleURLTypes"] as? [[String: Any]])
+                .flatMap { $0.first }
+                .flatMap { $0["CFBundleURLSchemes"] as? [String] }?
+                .first ?? "livecontainer"
+            var comps = URLComponents()
+            comps.scheme = scheme
+            comps.host = "livecontainer-launch"
+            comps.queryItems = [URLQueryItem(name: "bundle-name", value: guest)]
+            if let url = comps.url {
+                DispatchQueue.main.async {
+                    UIApplication.shared.open(url, options: [:], completionHandler: nil)
+                }
+            }
+        }
+        completionHandler()
+    }
 
 public class ViewAppIntentHandler: NSObject, ViewAppIntentHandling
 {

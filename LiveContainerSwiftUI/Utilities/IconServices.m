@@ -332,8 +332,10 @@ CGImageRef loadCGImageFromURL(NSURL *url) {
         descriptor.specialIconOptions = 2;
     }
     
+    // Mask always (squircle). Border is optional — border plate was causing
+    // visible white frames around home icons when hasBorder=YES.
     descriptor.drawBorder = hasBorder;
-    descriptor.shouldApplyMask = hasBorder;
+    descriptor.shouldApplyMask = YES;
     
     if(style == Original) {
         [iconsNeedToGenerateOriginalIcon addObject:icon];

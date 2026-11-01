@@ -469,6 +469,8 @@ struct LCSpringBoardHomeIcon: View {
                         .resizable()
                         .interpolation(.high)
                         .scaledToFill()
+                        // Overscale ~4% so any residual template padding is clipped away
+                        .frame(width: iconSide * 1.04, height: iconSide * 1.04)
                         .frame(width: iconSide, height: iconSide)
                         .clipped()
                 } else {
