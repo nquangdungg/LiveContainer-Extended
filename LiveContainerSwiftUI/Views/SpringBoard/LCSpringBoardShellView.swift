@@ -121,7 +121,7 @@ struct LCSpringBoardShellView: View {
         }
         .betterFileImporter(isPresented: $choosingIPA, types: [.ipa, .tipa], multiple: false, callback: { urls in
             Task { await installIPA(urls[0]) }
-        }, cancelHandler: { choosingIPA = false })
+        }, onDismiss: { choosingIPA = false })
         .alert("Error", isPresented: $errorShow) {
             Button("OK", role: .cancel) {}
         } message: { Text(errorInfo) }

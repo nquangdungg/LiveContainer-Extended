@@ -155,6 +155,7 @@ jobs:
           fi
 
       - name: Resolve version
+      - name: Resolve version (semver)
         id: version
         run: |
           set -e

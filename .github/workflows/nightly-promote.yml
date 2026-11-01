@@ -1,8 +1,6 @@
-name: Promote nightly to release
+name: Promote nightly to release (PR)
 
 on:
-  schedule:
-    - cron: "0 12 * * *"  # 12:00 UTC mỗi ngày
   workflow_dispatch:
 
 jobs:
@@ -11,23 +9,24 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-      issues: write
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
       - name: Setup Git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Run nightly promotion
+      - name: Run nightly promotion (PR path)
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh --version
-          bash .github/workflows/promote_nightly.sh
+          set -euo pipefail
+          chmod +x .github/workflows/promote_nightly.sh || true
+          if [ -f .github/workflows/promote_nightly.sh ]; then
+            bash .github/workflows/promote_nightly.sh
+          else
+            echo "promote_nightly.sh missing"
+            exit 0
+          fi

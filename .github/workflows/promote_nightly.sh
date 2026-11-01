@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export GH_TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
+export GH_PROMPT_DISABLED=1
 
 STATE_FILE=".github/upstream_state.json"
 PROMOTE_BRANCH="promote/nightly-release"
