@@ -7,3 +7,4 @@ packages/
 xcuserdata
 Resources/Frameworks/OpenSSL.framework
 apps_nightly.json
+.github/workflows/build.yml
