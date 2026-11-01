@@ -32,7 +32,7 @@ static BOOL LCExitOnStatusBarTapEnabled(void) {
 
 static void LCHapticTap(void) {
     UIImpactFeedbackGenerator *gen =
-        [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleMedium];
+        [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleHeavy];
     [gen prepare];
     [gen impactOccurred];
 }

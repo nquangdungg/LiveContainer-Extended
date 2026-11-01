@@ -408,7 +408,7 @@
 }
 
 - (void)handleStatusBarTapAction:(UIAction *)action {
-    UIImpactFeedbackGenerator *gen = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleMedium];
+    UIImpactFeedbackGenerator *gen = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleHeavy];
     [gen prepare];
     [gen impactOccurred];
     [self terminate];

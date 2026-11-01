@@ -100,10 +100,19 @@
     self.batteryIcon.image = [UIImage systemImageNamed:batName];
 }
 - (void)handleTap {
-    UIImpactFeedbackGenerator *gen = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleMedium];
+    // Heavy impact so exit feedback is obvious on device
+    UIImpactFeedbackGenerator *gen = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleHeavy];
     [gen prepare];
     [gen impactOccurred];
-    if (self.onTapExit) self.onTapExit();
+    if (@available(iOS 13.0, *)) {
+        UIImpactFeedbackGenerator *soft = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleSoft];
+        [soft impactOccurred];
+    }
+    if (self.onTapExit) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            self.onTapExit();
+        });
+    }
 }
 - (void)dealloc { [self stopUpdating]; }
 @end
