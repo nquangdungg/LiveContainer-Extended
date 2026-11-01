@@ -8,17 +8,6 @@
 #import "../LiveContainer/Localization.h"
 #import "utils.h"
 
-@interface DecoratedAppSceneViewController()
-@property(nonatomic) NSArray* activatedVerticalConstraints;
-@property(nonatomic) NSString* dataUUID;
-@property(nonatomic) int pid;
-@property(nonatomic) CGRect originalFrame;
-@property(nonatomic) UIBarButtonItem *maximizeButton;
-@property(nonatomic) bool isAppTerminationRequested;
-@property(nonatomic, strong) LCFakeStatusBarView *lcFakeStatusBar;
-@end
-
-
 // MARK: - Inline fake status bar (kept in this TU so it always links)
 @interface LCFakeStatusBarView : UIView
 @property (nonatomic, copy, nullable) void (^onTapExit)(void);
@@ -118,6 +107,17 @@
 }
 - (void)dealloc { [self stopUpdating]; }
 @end
+
+@interface DecoratedAppSceneViewController()
+@property(nonatomic) NSArray* activatedVerticalConstraints;
+@property(nonatomic) NSString* dataUUID;
+@property(nonatomic) int pid;
+@property(nonatomic) CGRect originalFrame;
+@property(nonatomic) UIBarButtonItem *maximizeButton;
+@property(nonatomic) bool isAppTerminationRequested;
+@property(nonatomic, strong) LCFakeStatusBarView *lcFakeStatusBar;
+@end
+
 
 @implementation DecoratedAppSceneViewController
 - (instancetype)initWindowName:(NSString*)windowName bundleId:(NSString*)bundleId dataUUID:(NSString*)dataUUID rootVC:(UIViewController*)rootVC {
