@@ -7,6 +7,7 @@
 #import "VirtualWindowsHostView.h"
 #import "../LiveContainer/Localization.h"
 #import "utils.h"
+#import "LCFakeStatusBarView.h"
 
 @interface DecoratedAppSceneViewController()
 @property(nonatomic) NSArray* activatedVerticalConstraints;
@@ -15,6 +16,7 @@
 @property(nonatomic) CGRect originalFrame;
 @property(nonatomic) UIBarButtonItem *maximizeButton;
 @property(nonatomic) bool isAppTerminationRequested;
+@property(nonatomic, strong) LCFakeStatusBarView *lcFakeStatusBar;
 @end
 
 @implementation DecoratedAppSceneViewController
@@ -156,6 +158,24 @@
     self.resizeHandle.alpha = _isMaximized ? 0.0 : 1.0;
     [self.resizeHandle addGestureRecognizer:resizeGesture];
     [self.view addSubview:self.resizeHandle];
+    // Fake status bar (tap once to exit + haptic)
+    {
+        CGFloat barH = 54.0;
+        if (self.view.window) {
+            barH = MAX(44.0, self.view.window.safeAreaInsets.top + 10.0);
+        }
+        LCFakeStatusBarView *bar = [[LCFakeStatusBarView alloc] initWithFrame:CGRectMake(0, 0, self.view.bounds.size.width, barH)];
+        bar.autoresizingMask = UIViewAutoresizingFlexibleWidth;
+        bar.tag = 0x4C434642; // 'LCFB'
+        __weak typeof(self) weakSelf = self;
+        bar.onTapExit = ^{
+            [weakSelf closeWindow];
+        };
+        [self.view addSubview:bar];
+        [bar startUpdating];
+        self.lcFakeStatusBar = bar;
+    }
+
     
     self.view.layer.borderWidth = _isMaximized ? 0.0 : 1.0;
     self.view.layer.borderColor = UIColor.secondarySystemBackgroundColor.CGColor;

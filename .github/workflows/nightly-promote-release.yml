@@ -4,11 +4,18 @@ on:
   schedule:
     - cron: "0 12 * * *"
   workflow_dispatch:
+    inputs:
+      force:
+        description: "Force re-upload onto existing public tag"
+        type: boolean
+        default: false
+      nightly_tag:
+        description: "Source prerelease tag"
+        type: string
+        default: nightly
 
 permissions:
   contents: write
-  issues: write
-  pull-requests: write
 
 jobs:
   promote:
@@ -19,37 +26,16 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup Git user
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-      - name: Install GitHub CLI (gh) and login
+      - name: Promote nightly to public release
         env:
+          # gh uses GH_TOKEN automatically — do NOT run `gh auth login`
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NIGHTLY_TAG: ${{ github.event.inputs.nightly_tag || 'nightly' }}
+          FORCE_PROMOTE: ${{ github.event.inputs.force == true && '1' || '0' }}
         run: |
           set -euo pipefail
-          if [[ "$(uname)" == "Darwin" ]]; then
-            brew install gh || true
-          else
-            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-            sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
-            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-            sudo apt-get update
-            sudo apt-get install -y gh
-          fi
-          echo "${GITHUB_TOKEN}" | gh auth login --with-token
-
-      - name: Ensure Python available
-        uses: actions/setup-python@v6
-        with:
-          python-version: '3.x'
-
-      - name: Make promote script executable
-        run: chmod +x .github/promote_nightly_release.sh
-
-      - name: Run promote -> create public Release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
+          command -v gh
+          gh --version
+          chmod +x .github/promote_nightly_release.sh
           ./.github/promote_nightly_release.sh

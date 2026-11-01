@@ -30,6 +30,12 @@ struct LCTabView: View {
         if LCTheme.isSpringBoardShellEnabled {
             LCSpringBoardShellView()
                 .environmentObject(sharedModel)
+            // Keep AppList alive (invisible) so IPA install notifications still run.
+            LCAppListView()
+                .frame(width: 0, height: 0)
+                .opacity(0)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
         } else {
         TabView(selection: $sharedModel.selectedTab) {
             if DataManager.shared.model.multiLCStatus != 2 {
