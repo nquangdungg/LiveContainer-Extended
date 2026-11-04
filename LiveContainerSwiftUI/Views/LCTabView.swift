@@ -27,7 +27,7 @@ struct LCTabView: View {
     
     var body: some View {
         ZStack {
-        if LCTheme.isSpringBoardShellEnabled {
+        if theme.springBoardShellEnabled {
             LCSpringBoardShellView()
                 .environmentObject(sharedModel)
             // Keep AppList alive (invisible) so IPA install notifications still run.
@@ -66,10 +66,8 @@ struct LCTabView: View {
         }
         .tint(theme.accent)
         } // end classic TabView (non-SpringBoard)
-        if appearanceEffects.effect == .snow {
-            LCSnowOverlay()
-                .zIndex(5)
-        }
+        LCBackgroundEffectsOverlay()
+            .zIndex(5)
         if developerMode.showEnabledBanner {
             VStack {
                 HStack(spacing: 10) {
@@ -87,6 +85,10 @@ struct LCTabView: View {
                 Spacer()
             }
             .zIndex(25)
+        }
+        if appLock.isPrivacyCurtainActive && appLock.isEnabled && appLock.hasPasscode() {
+            LCPrivacyShieldView()
+                .zIndex(29)
         }
         if appLock.isLocked {
             LCAppLockView()
@@ -106,9 +108,7 @@ struct LCTabView: View {
         }
 
         .onChange(of: scenePhase) { newPhase in
-            if newPhase != .active {
-                appLock.lockIfNeeded()
-            }
+            appLock.handleScenePhaseChange(to: newPhase)
         }
         .animation(.easeInOut(duration: 0.2), value: theme.accentPreset)
         .downloadAlert(helper: downloadHelper)

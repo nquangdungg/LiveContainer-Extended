@@ -71,18 +71,15 @@ struct LCAppSettingsView: View {
             Section {
                 Button {
                     Task {
-                        let ok = await LCStikIntegration.shared.openEnableJIT(bundleId: model.bundleIdentifier)
-                        if !ok {
-                            _ = await LCUtils.askForJIT(appName: model.displayName)
-                        }
+                        _ = await LCUtils.askForJIT(appName: model.displayName)
                     }
                 } label: {
-                    Label("Enable JIT via StikDebug", systemImage: "bolt.fill")
+                    Label("Request Enable JIT", systemImage: "bolt.fill")
                 }
             } header: {
                 Text("JIT")
             } footer: {
-                Text("iOS 17.4+. Install StikDebug, import pairing file, connect LocalDevVPN.")
+                Text("Request JIT activation using the configured JIT enabler.")
             }
 
 

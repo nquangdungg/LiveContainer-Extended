@@ -71,9 +71,7 @@ jobs:
       archive_path: archive
     outputs:
       has_sidestore: ${{ steps.pack.outputs.has_sidestore }}
-      has_stik: ${{ steps.pack.outputs.has_stik }}
       sidestore_version: ${{ steps.pack.outputs.sidestore_version }}
-      stik_version: ${{ steps.pack.outputs.stik_version }}
       version: ${{ steps.version.outputs.version }}
     steps:
       - name: Select Xcode
@@ -274,12 +272,6 @@ jobs:
           else
             echo "sidestore_version=not bundled" >> "$GITHUB_OUTPUT"
           fi
-          if [ -f stikdebug_version.txt ]; then
-            echo "stik_version=$(tr -d '\r\n' < stikdebug_version.txt)" >> "$GITHUB_OUTPUT"
-          else
-            echo "stik_version=not bundled" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Upload LiveContainer.ipa
         uses: actions/upload-artifact@v4
         with:
@@ -331,7 +323,6 @@ jobs:
           set -euo pipefail
           VER="${{ needs.build.outputs.version }}"
           SS="${{ needs.build.outputs.sidestore_version }}"
-          ST="${{ needs.build.outputs.stik_version }}"
           CHANNEL="${{ inputs.release_channel }}"
           if [ -z "$CHANNEL" ]; then
             if [ "${{ github.event_name }}" = "push" ]; then CHANNEL="stable"; else CHANNEL="nightly"; fi

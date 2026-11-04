@@ -12,17 +12,13 @@ import UserNotifications
 enum JITEnablerType : Int, CaseIterable, Identifiable {
     var id: Int { rawValue }
     case SideJITServer = 0
-    case StikJIT = 1
     case JITStreamerEBLegacy = 2
-    case StikJITLC = 3
     case SideStore = 4
     case StosDebug = 5
     case StosDebugLC = 6
     
     var displayName: String {
         switch self {
-        case .StikJIT: "StikDebug"
-        case .StikJITLC: "StikDebug (Another LiveContainer/Multitask)"
         case .StosDebug: "StosDebug"
         case .StosDebugLC: "StosDebug (Another LiveContainer/Multitask)"
         case .SideStore: "SideStore"
@@ -299,28 +295,32 @@ struct LCSettingsView: View {
                             Text("lc.settings.darkModeIcon".loc)
                         }
                     }
-                    Toggle(isOn: $theme.doubleTapStatusBarToExit) {
-                        Text("Tap status bar once to exit app")
+                    Toggle(isOn: $theme.statusBarTapToExit) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Tap status bar once to exit app")
+                            Text("Tap status bar or top window bar once to exit guest app")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 } header: {
                     Text("Appearance")
                 } footer: {
-                    Text("Accent applies instantly. Layout changes the Apps tab (List / Grid / Compact / SpringBoard).")
+                    Text("Accent applies instantly. Status bar tap immediately exits active guest app.")
                 }
                 Section {
-                    Toggle(isOn: Binding(
-                        get: { theme.springBoardShellEnabled },
-                        set: { newValue in
-                            theme.springBoardShellEnabled = newValue
-                            restartAlert = true
+                    Toggle(isOn: $theme.springBoardShellEnabled) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("SpringBoard Mode")
+                            Text("Full-screen iOS home screen with dock, 3x3 folders, & widgets")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
-                    )) {
-                        Text("SpringBoard Mode")
                     }
                 } header: {
                     Text("Home Screen")
                 } footer: {
-                    Text("Full-screen SpringBoard home (pages, dock, folders, search, switcher). Changing this requires restarting LiveContainer.")
+                    Text("Full-screen SpringBoard home with pages, dock, 3x3 folder previews, spotlight search, and app switcher.")
                 }
                 Section{
                     Toggle(isOn: $frameShortIcon) {
@@ -390,8 +390,6 @@ struct LCSettingsView: View {
                 }
                 
                 LCAppLockSettingsSection()
-
-                LCStikSettingsSection()
 
                 Section {
                     if developerMode.isEnabled {

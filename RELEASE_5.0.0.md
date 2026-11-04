@@ -4,9 +4,8 @@
 |-----------|---------|
 | **LiveContainer Extended** | `5.0.0` |
 | **Embedded SideStore** | (from CI `sidestore_version.txt`) |
-| **Embedded StikDebug** | (from CI `stikdebug_version.txt`) |
 
-Full fork of [LiveContainer](https://github.com/LiveContainer/LiveContainer) with a modern dashboard UI, built-in SideStore packaging, optional full **StikDebug** embed, and everyday quality-of-life tools.
+Full fork of [LiveContainer](https://github.com/LiveContainer/LiveContainer) with a modern dashboard UI, built-in SideStore packaging, and everyday quality-of-life tools.
 
 ---
 
@@ -29,13 +28,6 @@ Full fork of [LiveContainer](https://github.com/LiveContainer/LiveContainer) wit
 - App Lock (passcode / biometrics when allowed)
 - **Developer Mode** (confirm → restart → banner)
 - Custom guest icons & in-app **Info.plist** editor (Developer Mode)
-
-### StikDebug (SideStore-style)
-- CI can produce **`LiveContainer+StikDebug.ipa`** with full StikDebug under  
-  `Frameworks/StikDebugApp.framework`
-- Settings: status, open built-in StikDebug, import pairing file, request enable JIT  
-  (`stikdebug://enable-jit`)
-- Existing JIT Enabler options still supported
 
 ### Build / Release
 - GitHub Actions: archive + pack **retry until success** (configurable max attempts), then release

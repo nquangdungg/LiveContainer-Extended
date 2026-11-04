@@ -2,118 +2,245 @@
 //  LCAppLockView.swift
 //  LiveContainerSwiftUI
 //
+//  Modern iOS 18-style Screen Lock UI & App Lock Settings.
+//
 
 import SwiftUI
+import LocalAuthentication
 
 struct LCAppLockView: View {
     @ObservedObject private var lock = LCAppLockManager.shared
     @ObservedObject private var theme = LCTheme.shared
+    
     @State private var digits: String = ""
     @State private var errorShake = false
     @State private var message: String = "Enter Passcode"
+    @State private var isSuccess = false
+    
+    private let keyMatrix: [[(num: String, letters: String)]] = [
+        [("1", ""), ("2", "A B C"), ("3", "D E F")],
+        [("4", "G H I"), ("5", "J K L"), ("6", "M N O")],
+        [("7", "P Q R S"), ("8", "T U V"), ("9", "W X Y Z")],
+        [("bio", ""), ("0", ""), ("del", "")]
+    ]
     
     var body: some View {
         ZStack {
-            theme.pageBackground.ignoresSafeArea()
-            VStack(spacing: 28) {
-                Spacer(minLength: 40)
-                Image(systemName: "lock.fill")
-                    .font(.system(size: 40, weight: .semibold))
-                    .foregroundStyle(theme.accent)
-                Text("LiveContainer Extended")
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
-                Text(message)
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(theme.secondaryText)
+            // Background: frosted acrylic with subtle glow
+            ZStack {
+                theme.pageBackground
+                LinearGradient(
+                    colors: [
+                        theme.accent.opacity(0.12),
+                        Color.clear,
+                        theme.accentOpposite.opacity(0.08)
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            }
+            .ignoresSafeArea()
+            
+            VStack(spacing: 24) {
+                Spacer(minLength: 20)
                 
-                HStack(spacing: 14) {
+                // Padlock Header
+                VStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(theme.accent.opacity(0.15))
+                            .frame(width: 72, height: 72)
+                        
+                        Image(systemName: isSuccess ? "lock.open.fill" : (lock.isLockedOut ? "lock.slash.fill" : "lock.fill"))
+                            .font(.system(size: 32, weight: .semibold))
+                            .foregroundStyle(lock.isLockedOut ? theme.danger : theme.accent)
+                            .scaleEffect(isSuccess ? 1.15 : 1.0)
+                            .animation(.spring(response: 0.35, dampingFraction: 0.6), value: isSuccess)
+                    }
+                    
+                    Text("LiveContainer")
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                    
+                    if lock.isLockedOut {
+                        HStack(spacing: 6) {
+                            Image(systemName: "clock.badge.exclamationmark")
+                            Text("Try again in \(lock.lockoutSecondsRemaining)s")
+                        }
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(theme.danger)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
+                        .background(theme.danger.opacity(0.14), in: Capsule())
+                    } else {
+                        Text(message)
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(message == "Wrong passcode" ? theme.danger : theme.secondaryText)
+                    }
+                }
+                
+                // 6-digit Indicator Dots
+                HStack(spacing: 16) {
                     ForEach(0..<6, id: \.self) { i in
                         Circle()
-                            .strokeBorder(theme.accent.opacity(0.5), lineWidth: 1.5)
-                            .background(
-                                Circle().fill(i < digits.count ? theme.accent : Color.clear)
+                            .strokeBorder(
+                                i < digits.count ? theme.accent : theme.secondaryText.opacity(0.4),
+                                lineWidth: 2
                             )
-                            .frame(width: 14, height: 14)
+                            .background(
+                                Circle()
+                                    .fill(i < digits.count ? theme.accent : Color.clear)
+                            )
+                            .frame(width: 15, height: 15)
+                            .scaleEffect(i < digits.count ? 1.15 : 1.0)
+                            .animation(.spring(response: 0.2, dampingFraction: 0.6), value: digits.count)
                     }
                 }
+                .padding(.vertical, 8)
                 .modifier(LCShakeEffect(shakes: errorShake ? 2 : 0))
                 
-                if lock.biometricsAllowed && lock.biometricsAvailable {
-                    Button {
-                        Task {
-                            _ = await lock.unlockWithBiometrics()
-                        }
-                    } label: {
-                        Label("Unlock with \(lock.biometricsLabel)", systemImage: lock.biometricsLabel == "Face ID" ? "faceid" : "touchid")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundStyle(theme.accent)
-                    }
-                    .padding(.top, 8)
-                }
-                
                 Spacer()
-                numpad
-                    .padding(.bottom, 24)
+                
+                // Keypad
+                numpadGrid
+                    .disabled(lock.isLockedOut)
+                    .opacity(lock.isLockedOut ? 0.45 : 1.0)
+                    .padding(.bottom, 20)
             }
-            .padding(.horizontal, 24)
+            .padding(.horizontal, 28)
         }
         .onAppear {
-            Task {
-                if lock.biometricsAllowed {
+            if lock.biometricsAllowed && !lock.isLockedOut {
+                Task {
                     _ = await lock.unlockWithBiometrics()
                 }
             }
         }
     }
     
-    private var numpad: some View {
-        let keys: [[String]] = [
-            ["1","2","3"],
-            ["4","5","6"],
-            ["7","8","9"],
-            ["","0","⌫"]
-        ]
-        return VStack(spacing: 12) {
-            ForEach(keys, id: \.self) { row in
-                HStack(spacing: 18) {
-                    ForEach(row, id: \.self) { key in
-                        Button {
-                            handleKey(key)
-                        } label: {
-                            Text(key)
-                                .font(.system(size: 28, weight: .medium, design: .rounded))
-                                .frame(width: 76, height: 76)
-                                .background(
-                                    Circle().fill(key.isEmpty ? Color.clear : Color.primary.opacity(0.08))
-                                )
-                        }
-                        .disabled(key.isEmpty)
-                        .buttonStyle(.plain)
+    // MARK: - Keypad Grid
+    
+    private var numpadGrid: some View {
+        VStack(spacing: 16) {
+            ForEach(0..<keyMatrix.count, id: \.self) { rowIdx in
+                HStack(spacing: 24) {
+                    ForEach(0..<keyMatrix[rowIdx].count, id: \.self) { colIdx in
+                        let item = keyMatrix[rowIdx][colIdx]
+                        keypadCell(item.num, sub: item.letters)
                     }
                 }
             }
         }
     }
     
-    private func handleKey(_ key: String) {
-        if key == "⌫" {
-            if !digits.isEmpty { digits.removeLast() }
-            return
+    @ViewBuilder
+    private func keypadCell(_ key: String, sub: String) -> some View {
+        if key == "bio" {
+            if lock.biometricsAllowed && lock.biometricsAvailable {
+                Button {
+                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    Task { _ = await lock.unlockWithBiometrics() }
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(Color.primary.opacity(0.06))
+                            .frame(width: 76, height: 76)
+                        Image(systemName: lock.biometricsLabel == "Face ID" ? "faceid" : "touchid")
+                            .font(.system(size: 26, weight: .regular))
+                            .foregroundStyle(theme.accent)
+                    }
+                }
+                .buttonStyle(.plain)
+            } else {
+                Color.clear.frame(width: 76, height: 76)
+            }
+        } else if key == "del" {
+            Button {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                if !digits.isEmpty { digits.removeLast() }
+            } label: {
+                ZStack {
+                    Circle()
+                        .fill(Color.primary.opacity(0.06))
+                        .frame(width: 76, height: 76)
+                    Image(systemName: "delete.backward")
+                        .font(.system(size: 20, weight: .medium))
+                        .foregroundStyle(.primary)
+                }
+            }
+            .buttonStyle(.plain)
+            .opacity(digits.isEmpty ? 0.3 : 1.0)
+            .disabled(digits.isEmpty)
+        } else {
+            Button {
+                handleDigitPress(key)
+            } label: {
+                ZStack {
+                    Circle()
+                        .fill(Color.primary.opacity(0.08))
+                        .frame(width: 76, height: 76)
+                    
+                    VStack(spacing: 1) {
+                        Text(key)
+                            .font(.system(size: 30, weight: .medium, design: .rounded))
+                        if !sub.isEmpty {
+                            Text(sub)
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundStyle(theme.secondaryText)
+                                .tracking(1.5)
+                        }
+                    }
+                }
+            }
+            .buttonStyle(.plain)
         }
+    }
+    
+    private func handleDigitPress(_ digit: String) {
+        guard !lock.isLockedOut else { return }
         guard digits.count < 6 else { return }
-        digits.append(key)
+        
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        digits.append(digit)
+        
         if digits.count == 6 {
             if lock.verifyPasscode(digits) {
+                isSuccess = true
                 message = "Unlocked"
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
             } else {
+                UINotificationFeedbackGenerator().notificationOccurred(.error)
                 message = "Wrong passcode"
                 errorShake = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
                     errorShake = false
                     digits = ""
                 }
             }
         }
+    }
+}
+
+// MARK: - Privacy Shield Curtain (App Switcher Protection)
+
+struct LCPrivacyShieldView: View {
+    @ObservedObject private var theme = LCTheme.shared
+    
+    var body: some View {
+        ZStack {
+            Rectangle()
+                .fill(.ultraThinMaterial)
+                .ignoresSafeArea()
+            
+            VStack(spacing: 12) {
+                Image(systemName: "lock.shield.fill")
+                    .font(.system(size: 44, weight: .bold))
+                    .foregroundStyle(theme.accent)
+                Text("LiveContainer Extended")
+                    .font(.headline)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .allowsHitTesting(true)
     }
 }
 
@@ -128,7 +255,8 @@ struct LCShakeEffect: GeometryEffect {
     }
 }
 
-/// Settings section to enable / change app lock
+// MARK: - Settings Section
+
 struct LCAppLockSettingsSection: View {
     @ObservedObject private var lock = LCAppLockManager.shared
     @State private var showSet = false
@@ -153,9 +281,17 @@ struct LCAppLockSettingsSection: View {
                     }
                 }
             ))
+            
             if lock.isEnabled && lock.hasPasscode() {
                 Toggle("Allow \(lock.biometricsLabel)", isOn: $lock.biometricsAllowed)
                     .disabled(!lock.biometricsAvailable)
+                
+                Picker("Auto-Lock", selection: $lock.autoLockTimeout) {
+                    ForEach(LCAutoLockTimeout.allCases) { timeout in
+                        Text(timeout.rawValue).tag(timeout)
+                    }
+                }
+                
                 Button("Change Passcode") {
                     showSet = true
                     step = 0
@@ -165,27 +301,36 @@ struct LCAppLockSettingsSection: View {
                 }
             }
         } header: {
-            Text("App Lock")
+            Text("Security & App Lock")
         } footer: {
-            Text("When enabled, Face ID / Touch ID or a 6-digit passcode is required every time you open LiveContainer Extended. Passcode is stored only in the device Keychain.")
+            Text("Passcode is salted and hashed with SHA-256 before storing in the device Keychain. Features brute-force protection and automatic app switcher privacy shield.")
         }
         .sheet(isPresented: $showSet) {
             NavigationView {
-                VStack(spacing: 16) {
-                    Text(step == 0 ? "Enter a new 6-digit passcode" : "Confirm passcode")
+                VStack(spacing: 20) {
+                    Image(systemName: step == 0 ? "key.fill" : "checkmark.shield.fill")
+                        .font(.system(size: 38))
+                        .foregroundStyle(Color.accentColor)
+                        .padding(.top, 20)
+                    
+                    Text(step == 0 ? "Enter a new 6-digit passcode" : "Confirm your passcode")
                         .font(.headline)
+                    
                     SecureField("••••••", text: step == 0 ? $newCode : $confirmCode)
                         .keyboardType(.numberPad)
                         .textFieldStyle(.roundedBorder)
                         .multilineTextAlignment(.center)
-                        .padding(.horizontal, 40)
+                        .font(.title2.weight(.bold))
+                        .padding(.horizontal, 48)
+                    
                     if !err.isEmpty {
                         Text(err).foregroundStyle(.red).font(.footnote)
                     }
-                    Button(step == 0 ? "Continue" : "Save") {
+                    
+                    Button(step == 0 ? "Continue" : "Save Passcode") {
                         if step == 0 {
                             guard newCode.count == 6, newCode.allSatisfy(\.isNumber) else {
-                                err = "Passcode must be 6 digits"
+                                err = "Passcode must be 6 numeric digits"
                                 return
                             }
                             step = 1
@@ -204,10 +349,11 @@ struct LCAppLockSettingsSection: View {
                         }
                     }
                     .buttonStyle(.borderedProminent)
+                    .padding(.top, 8)
+                    
                     Spacer()
                 }
-                .padding(.top, 40)
-                .navigationTitle("App Lock")
+                .navigationTitle("Set Passcode")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {

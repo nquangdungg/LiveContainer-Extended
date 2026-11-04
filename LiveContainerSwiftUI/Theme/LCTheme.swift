@@ -71,10 +71,20 @@ final class LCTheme: ObservableObject {
         }
     }
     
-    @Published var doubleTapStatusBarToExit: Bool {
+    @Published var statusBarTapToExit: Bool {
         didSet {
-            defaults.set(doubleTapStatusBarToExit, forKey: "LCDoubleTapStatusBarToExit")
+            LCUtils.appGroupUserDefault.set(statusBarTapToExit, forKey: "LCStatusBarTapToExit")
+            LCUtils.appGroupUserDefault.set(statusBarTapToExit, forKey: "LCDoubleTapStatusBarToExit")
+            defaults.set(statusBarTapToExit, forKey: "LCStatusBarTapToExit")
+            defaults.set(statusBarTapToExit, forKey: "LCDoubleTapStatusBarToExit")
+            objectWillChange.send()
         }
+    }
+
+    /// Backwards compatibility alias
+    var doubleTapStatusBarToExit: Bool {
+        get { statusBarTapToExit }
+        set { statusBarTapToExit = newValue }
     }
     
     @Published var appLayout: LCAppLayoutMode {
@@ -84,20 +94,26 @@ final class LCTheme: ObservableObject {
         }
     }
     
-    /// Full SpringBoard home shell. Applied only after app relaunch.
+    /// Full SpringBoard home shell.
     @Published var springBoardShellEnabled: Bool {
         didSet {
+            LCUtils.appGroupUserDefault.set(springBoardShellEnabled, forKey: "LCSpringBoardShellEnabled")
             defaults.set(springBoardShellEnabled, forKey: "LCSpringBoardShellEnabled")
+            objectWillChange.send()
         }
     }
     
     /// Pending shell preference written before restart.
     static func setSpringBoardShellPending(_ enabled: Bool) {
         LCUtils.appGroupUserDefault.set(enabled, forKey: "LCSpringBoardShellEnabled")
+        UserDefaults.standard.set(enabled, forKey: "LCSpringBoardShellEnabled")
     }
     
     static var isSpringBoardShellEnabled: Bool {
-        LCUtils.appGroupUserDefault.bool(forKey: "LCSpringBoardShellEnabled")
+        if LCUtils.appGroupUserDefault.object(forKey: "LCSpringBoardShellEnabled") != nil {
+            return LCUtils.appGroupUserDefault.bool(forKey: "LCSpringBoardShellEnabled")
+        }
+        return UserDefaults.standard.bool(forKey: "LCSpringBoardShellEnabled")
     }
     
     var accent: Color { accentPreset.color }
@@ -149,12 +165,21 @@ final class LCTheme: ObservableObject {
         let raw = defaults.string(forKey: "LCAccentPreset") ?? LCAccentPreset.orange.rawValue
         self.accentPreset = LCAccentPreset(rawValue: raw) ?? .orange
         
-        if defaults.object(forKey: "LCDoubleTapStatusBarToExit") == nil {
-            self.doubleTapStatusBarToExit = true
+        if let val = LCUtils.appGroupUserDefault.object(forKey: "LCStatusBarTapToExit") as? Bool {
+            self.statusBarTapToExit = val
+        } else if let val = LCUtils.appGroupUserDefault.object(forKey: "LCDoubleTapStatusBarToExit") as? Bool {
+            self.statusBarTapToExit = val
+        } else if let val = defaults.object(forKey: "LCDoubleTapStatusBarToExit") as? Bool {
+            self.statusBarTapToExit = val
         } else {
-            self.doubleTapStatusBarToExit = defaults.bool(forKey: "LCDoubleTapStatusBarToExit")
+            self.statusBarTapToExit = true
         }
-        self.springBoardShellEnabled = defaults.bool(forKey: "LCSpringBoardShellEnabled")
+
+        if let sbVal = LCUtils.appGroupUserDefault.object(forKey: "LCSpringBoardShellEnabled") as? Bool {
+            self.springBoardShellEnabled = sbVal
+        } else {
+            self.springBoardShellEnabled = defaults.bool(forKey: "LCSpringBoardShellEnabled")
+        }
         
         let layoutRaw = defaults.string(forKey: "LCAppLayoutMode") ?? LCAppLayoutMode.list.rawValue
         self.appLayout = LCAppLayoutMode(rawValue: layoutRaw) ?? .list

@@ -1,7 +1,30 @@
 //
 //  LCFakeStatusBarView.m
+//  LiveContainer — decorative status bar; tap-to-exit for guest apps
 //
 #import "LCFakeStatusBarView.h"
+#import <AudioToolbox/AudioToolbox.h>
+
+static BOOL LCExitOnStatusBarTapEnabled(void) {
+    Class sharedUtilsClass = NSClassFromString(@"LCSharedUtils");
+    NSString *appGroupId = nil;
+    if ([sharedUtilsClass respondsToSelector:@selector(appGroupID)]) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+        appGroupId = [sharedUtilsClass performSelector:@selector(appGroupID)];
+#pragma clang diagnostic pop
+    }
+    NSUserDefaults *defaults = appGroupId
+        ? [[NSUserDefaults alloc] initWithSuiteName:appGroupId]
+        : [NSUserDefaults standardUserDefaults];
+    if ([defaults objectForKey:@"LCStatusBarTapToExit"] != nil) {
+        return [defaults boolForKey:@"LCStatusBarTapToExit"];
+    }
+    if ([defaults objectForKey:@"LCDoubleTapStatusBarToExit"] != nil) {
+        return [defaults boolForKey:@"LCDoubleTapStatusBarToExit"];
+    }
+    return YES;
+}
 
 @interface LCFakeStatusBarView ()
 @property (nonatomic, strong) UILabel *timeLabel;
@@ -99,7 +122,7 @@
     self.timeLabel.text = [fmt stringFromDate:[NSDate date]];
 
     float level = [UIDevice currentDevice].batteryLevel;
-    if (level < 0) level = 1.0;
+    if (level < 0) level = 1.0f;
     int pct = (int)roundf(level * 100.0f);
     self.batteryLabel.text = [NSString stringWithFormat:@"%d%%", pct];
 
@@ -111,12 +134,18 @@
 }
 
 - (void)handleTap {
-    UIImpactFeedbackGenerator *gen = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleMedium];
+    if (!LCExitOnStatusBarTapEnabled()) {
+        return;
+    }
+    AudioServicesPlaySystemSound(1519); // Peek
+    AudioServicesPlaySystemSound(1520); // Pop
+    UIImpactFeedbackGenerator *gen = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleHeavy];
     [gen prepare];
     [gen impactOccurred];
-    if (self.onTapExit) {
-        self.onTapExit();
-    }
+    void (^exitBlock)(void) = self.onTapExit;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.08 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        if (exitBlock) exitBlock();
+    });
 }
 
 - (void)dealloc {

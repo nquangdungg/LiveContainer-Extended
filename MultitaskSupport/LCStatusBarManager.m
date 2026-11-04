@@ -25,6 +25,9 @@ static BOOL LCExitOnStatusBarTapEnabled(void) {
     NSUserDefaults *defaults = appGroupId
         ? [[NSUserDefaults alloc] initWithSuiteName:appGroupId]
         : [NSUserDefaults standardUserDefaults];
+    if ([defaults objectForKey:@"LCStatusBarTapToExit"] != nil) {
+        return [defaults boolForKey:@"LCStatusBarTapToExit"];
+    }
     if ([defaults objectForKey:@"LCDoubleTapStatusBarToExit"] != nil) {
         return [defaults boolForKey:@"LCDoubleTapStatusBarToExit"];
     }

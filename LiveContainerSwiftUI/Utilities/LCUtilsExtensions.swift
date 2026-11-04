@@ -352,71 +352,7 @@ extension LCUtils {
                 onServerMessage?("JIT acquisition will continue in StosDebug.")
                 
                 await UIApplication.shared.open(URL(string: launchURLStr)!)
-            }
-            
-                } else if jitEnabler == .StikJIT || jitEnabler == .StikJITLC {
-            // StikDebug only: stikdebug://enable-jit?bundle-id=&pid=&script-name=
-            let pid = getpid()
-            let bundleId = Bundle.main.bundleIdentifier ?? ""
-            var launchURLStr = "stikdebug://enable-jit?bundle-id=\(bundleId)&pid=\(pid)"
-            if let script = script, !script.isEmpty {
-                launchURLStr += "&script-data=\(script)"
-            } else {
-                launchURLStr += "&script-name=universal.js"
-            }
-            let launchURL : URL
-            if jitEnabler == .StikJITLC {
-                let encodedStr = Data(launchURLStr.utf8).base64EncodedString()
-
-                var appToLaunch: LCAppModel? = nil
-                // find an app that can respond to stikdebug://
-                appLoop:
-                for app in DataManager.shared.model.apps {
-                    if let schemes = app.appInfo.urlSchemes() {
-                        for scheme in schemes {
-                            if let scheme = scheme as? String, scheme == "stikdebug" || scheme == "stikjit" {
-                                appToLaunch = app
-                                break appLoop
-                            }
-                        }
-                    }
-                }
-                guard let appToLaunch else {
-                    onServerMessage?("StikDebug is not installed in LiveContainer.")
-                    return false
-                }
-                
-                if !appToLaunch.uiIsShared {
-                    onServerMessage?("StikDebug is installed in LiveContainer, but is not a shared app. Convert it to a shared app to continue.")
-                    return false
-                }
-                // check if stikdebug is already running
-                var freeScheme = LCSharedUtils.getContainerUsingLCScheme(withFolderName: appToLaunch.uiDefaultDataFolder)
-                
-                if(freeScheme == nil) {
-                    // if not, try to find a free lc
-                    forEachInstalledLC(isFree: true) { scheme, shouldBreak in
-                        freeScheme = scheme
-                        shouldBreak = true
-                    }
-                }
-                guard let freeScheme else {
-                    onServerMessage?("No free LiveContainer is available. Please either: \n(1)close one, \n(2)install a new one, \n(3)choose another method to enable JIT.")
-                    return false
-                }
-                
-                launchURL = URL(string: "\(freeScheme)://open-url?url=\(encodedStr)")!
-                LCUtils.appGroupUserDefault.set(freeScheme, forKey: "LCLaunchExtensionScheme")
-                LCUtils.appGroupUserDefault.set(appToLaunch.appInfo.relativeBundlePath, forKey: "LCLaunchExtensionBundleID")
-                LCUtils.appGroupUserDefault.set(Date.now, forKey: "LCLaunchExtensionLaunchDate")
-                onServerMessage?("JIT acquisition will continue in another LiveContainer.")
-                
-            } else {
-                launchURL = URL(string: launchURLStr)!
-                onServerMessage?("JIT acquisition will continue in StikDebug.")
-            }
-            await UIApplication.shared.open(launchURL)
-        } else if jitEnabler == .SideStore {
+            } else if jitEnabler == .SideStore {
             onServerMessage?("JIT acquisition will continue in SideStore.")
             let launchURL = URL(string: "sidestore://enable-jit?bundle-id=\(Bundle.main.bundleIdentifier!)")!
             await UIApplication.shared.open(launchURL)
@@ -524,20 +460,6 @@ extension LCUtils {
         
         Task {
             try await sideStoreApp.runApp(bundleIdOverride: "builtinSideStore", urlStr: urlStr)
-        }
-    }
-
-    @MainActor
-    static func openBuiltInStikDebug(delegate: LCAppModelDelegate? = nil) async {
-        guard BuiltInStikDebugAppInfo.isEmbedded else {
-            _ = await LCStikIntegration.shared.openEnableJIT()
-            return
-        }
-        let app = LCAppModel(appInfo: BuiltInStikDebugAppInfo.shared, delegate: delegate)
-        do {
-            try await app.runApp(bundleIdOverride: "builtinStikDebug")
-        } catch {
-            print("openBuiltInStikDebug: \(error)")
         }
     }
 }

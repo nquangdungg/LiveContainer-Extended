@@ -71,8 +71,6 @@
 	<string>public.app-category.education</string>
 	<key>LSApplicationQueriesSchemes</key>
 	<array>
-		<string>stikdebug</string>
-		<string>stikjit</string>
 		<string>sidestore</string>
 		<string>livecontainer</string>
 		<string>livecontainer2</string>
@@ -145,7 +143,6 @@
 		<string>_sleep-proxy._udp</string>
 		<string>_dns-sd._udp</string>
 		<string>_remotepairing-pairable-host._tcp</string>
-		<string>_stikpairprobe._tcp</string>
 		<string>_flux._udp</string>
 		<string>_dicom._tcp</string>
 	</array>

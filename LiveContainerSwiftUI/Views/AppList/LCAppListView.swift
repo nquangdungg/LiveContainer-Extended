@@ -1213,9 +1213,6 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
         if appFound == nil && bundleId == "builtinSideStore" {
             appFound = LCAppModel(appInfo: BuiltInSideStoreAppInfo.shared)
         }
-        if appFound == nil && bundleId == "builtinStikDebug" {
-            appFound = LCAppModel(appInfo: BuiltInStikDebugAppInfo.shared)
-        }
         
         if isFoundAppLocked && !sharedModel.isHiddenAppUnlocked {
             do {
@@ -1312,24 +1309,6 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                         }
                     }
                     return
-                }
-                
-                let encoded = encodedData.map { "&script-data=\($0)" } ?? ""
-                if let url = URL(string: "stikjit://enable-jit?bundle-id=\(Bundle.main.bundleIdentifier!)&pid=\(pid)\(encoded)") {
-                    if jitEnabler == .StikJITLC {
-                        if sharedModel.apps.contains(where: { candidate in
-                            return candidate.appInfo.urlSchemes().contains("stikjit") &&
-                            (sharedModel.multiLCStatus != 2 || candidate.appInfo.isShared)
-                        }) {
-                            Task { await openWebView(urlString: url.absoluteString) }
-                        } else {
-                            errorInfo = "StikDebug is not found. Please install it first and switch it to shared app."
-                            errorShow = true
-                            return
-                        }
-                    } else {
-                        UIApplication.shared.open(url)
-                    }
                 }
             }
         }

@@ -779,19 +779,15 @@ static LCControlAppURLHandling LCHandleControlAppURL(NSURL *url, NSString** modi
 @end
 
 // =============================================================================
-// LiveContainer Extended: Double-tap near clock → return to LiveContainer
+// LiveContainer Extended: One-tap status bar near clock → return to LiveContainer
 // =============================================================================
 
-@interface UIStatusBarManager (LCGuestDoubleTap)
+@interface UIStatusBarManager (LCGuestStatusBarTap)
 - (void)handleTapAction:(UIAction *)action;
 - (void)lc_handleTapAction:(UIAction *)action;
 @end
 
-@implementation UIStatusBarManager (LCGuestDoubleTap)
-
-static NSTimeInterval LCGuestPendingTapTime = 0;
-static dispatch_block_t LCGuestPendingSingleTapBlock = nil;
-static const NSTimeInterval kLCGuestDoubleTapWindow = 0.40;
+@implementation UIStatusBarManager (LCGuestStatusBarTap)
 
 static BOOL LCGuestTapIsOnClockSide(UIAction *action) {
     id sender = nil;
@@ -830,7 +826,9 @@ static BOOL LCGuestTapIsOnClockSide(UIAction *action) {
     NSUserDefaults *defs = groupId
         ? [[NSUserDefaults alloc] initWithSuiteName:groupId]
         : [NSUserDefaults standardUserDefaults];
-    if ([defs objectForKey:@"LCDoubleTapStatusBarToExit"] != nil) {
+    if ([defs objectForKey:@"LCStatusBarTapToExit"] != nil) {
+        enabled = [defs boolForKey:@"LCStatusBarTapToExit"];
+    } else if ([defs objectForKey:@"LCDoubleTapStatusBarToExit"] != nil) {
         enabled = [defs boolForKey:@"LCDoubleTapStatusBarToExit"];
     }
 
@@ -839,46 +837,25 @@ static BOOL LCGuestTapIsOnClockSide(UIAction *action) {
         return;
     }
 
-    NSTimeInterval now = CFAbsoluteTimeGetCurrent();
-    if (LCGuestPendingSingleTapBlock != nil &&
-        LCGuestPendingTapTime > 0 &&
-        (now - LCGuestPendingTapTime) <= kLCGuestDoubleTapWindow) {
-        dispatch_block_cancel(LCGuestPendingSingleTapBlock);
-        LCGuestPendingSingleTapBlock = nil;
-        LCGuestPendingTapTime = 0;
+    // Exactly one tap → haptic → exit to LiveContainer
+    AudioServicesPlaySystemSound(1519);
+    AudioServicesPlaySystemSound(1520);
+    UIImpactFeedbackGenerator *gen =
+        [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleHeavy];
+    [gen prepare];
+    [gen impactOccurred];
 
-        UIImpactFeedbackGenerator *gen =
-            [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleMedium];
-        [gen prepare];
-        [gen impactOccurred];
-
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.08 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
         if ([sharedUtils respondsToSelector:@selector(launchToGuestAppWithClassicMode:)]) {
             [sharedUtils launchToGuestAppWithClassicMode:0];
         }
-        return;
-    }
-
-    if (LCGuestPendingSingleTapBlock) {
-        dispatch_block_cancel(LCGuestPendingSingleTapBlock);
-        LCGuestPendingSingleTapBlock = nil;
-    }
-    LCGuestPendingTapTime = now;
-    __weak typeof(self) weakSelf = self;
-    UIAction *captured = action;
-    LCGuestPendingSingleTapBlock = dispatch_block_create(0, ^{
-        LCGuestPendingSingleTapBlock = nil;
-        LCGuestPendingTapTime = 0;
-        [weakSelf lc_handleTapAction:captured];
     });
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kLCGuestDoubleTapWindow * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(),
-                   LCGuestPendingSingleTapBlock);
 }
 
 @end
 
 __attribute__((constructor))
-static void LCGuestDoubleTapStatusBarInit(void) {
+static void LCGuestStatusBarTapInit(void) {
     if (!NSUserDefaults.lcGuestAppId) return;
 
     if (@available(iOS 15.0, *)) {
