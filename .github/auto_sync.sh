@@ -1,1 +1,0 @@
-<auto_sync.sh content>

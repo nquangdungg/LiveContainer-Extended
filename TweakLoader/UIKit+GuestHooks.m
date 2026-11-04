@@ -782,8 +782,11 @@ static LCControlAppURLHandling LCHandleControlAppURL(NSURL *url, NSString** modi
 // LiveContainer Extended: One-tap status bar near clock → return to LiveContainer
 // =============================================================================
 
-@interface UIStatusBarManager (LCGuestStatusBarTap)
+@interface UIStatusBarManager (LCGuestStatusBarTapPrivate)
 - (void)handleTapAction:(UIAction *)action;
+@end
+
+@interface UIStatusBarManager (LCGuestStatusBarTap)
 - (void)lc_handleTapAction:(UIAction *)action;
 @end
 
@@ -838,8 +841,6 @@ static BOOL LCGuestTapIsOnClockSide(UIAction *action) {
     }
 
     // Exactly one tap → haptic → exit to LiveContainer
-    AudioServicesPlaySystemSound(1519);
-    AudioServicesPlaySystemSound(1520);
     UIImpactFeedbackGenerator *gen =
         [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleHeavy];
     [gen prepare];

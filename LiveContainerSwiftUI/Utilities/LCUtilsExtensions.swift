@@ -305,7 +305,7 @@ extension LCUtils {
 
 
                 var appToLaunch: LCAppModel? = nil
-                // find an app that can respond to stikjit://
+                // find an app that can respond to stosdebug://
                 appLoop:
                 for app in DataManager.shared.model.apps {
                     if let schemes = app.appInfo.urlSchemes() {
@@ -352,7 +352,8 @@ extension LCUtils {
                 onServerMessage?("JIT acquisition will continue in StosDebug.")
                 
                 await UIApplication.shared.open(URL(string: launchURLStr)!)
-            } else if jitEnabler == .SideStore {
+            }
+        } else if jitEnabler == .SideStore {
             onServerMessage?("JIT acquisition will continue in SideStore.")
             let launchURL = URL(string: "sidestore://enable-jit?bundle-id=\(Bundle.main.bundleIdentifier!)")!
             await UIApplication.shared.open(launchURL)
