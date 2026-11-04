@@ -286,6 +286,49 @@ struct LCSettingsView: View {
                         }
                     }
                     .padding(.vertical, 4)
+
+                    // Ambient Background Effect
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack {
+                            Text("Background Effect")
+                                .font(.system(size: 15, weight: .semibold))
+                            Spacer()
+                            Text(appearanceEffects.effect.rawValue)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(theme.accent)
+                        }
+                        
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 8) {
+                                ForEach(LCParticleEffect.allCases) { effect in
+                                    Button {
+                                        withAnimation(.easeInOut(duration: 0.18)) {
+                                            appearanceEffects.effect = effect
+                                        }
+                                    } label: {
+                                        HStack(spacing: 6) {
+                                            Image(systemName: effect.icon)
+                                                .font(.system(size: 12, weight: .semibold))
+                                            Text(effect.rawValue)
+                                                .font(.system(size: 12, weight: .medium))
+                                        }
+                                        .foregroundStyle(appearanceEffects.effect == effect ? Color.white : Color.primary)
+                                        .padding(.horizontal, 11)
+                                        .padding(.vertical, 7)
+                                        .background(
+                                            appearanceEffects.effect == effect
+                                                ? theme.accent
+                                                : Color(UIColor.secondarySystemFill)
+                                        )
+                                        .clipShape(Capsule())
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            .padding(.vertical, 2)
+                        }
+                    }
+                    .padding(.vertical, 4)
                     
                     Toggle(isOn: $dynamicColors) {
                         Text("lc.settings.dynamicColors".loc)

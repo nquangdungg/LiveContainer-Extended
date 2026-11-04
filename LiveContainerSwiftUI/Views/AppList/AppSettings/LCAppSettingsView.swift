@@ -40,6 +40,8 @@ struct LCAppSettingsView: View {
     @State private var selectUnusedContainerSheetShow = false
     
     @EnvironmentObject private var sharedModel : SharedModel
+    @ObservedObject private var theme = LCTheme.shared
+    @AppStorage("darkModeIcon", store: LCUtils.appGroupUserDefault) private var darkModeIcon = false
     
     init(model: LCAppModel) {
         self.appInfo = model.appInfo
@@ -48,6 +50,96 @@ struct LCAppSettingsView: View {
     
     var body: some View {
         Form {
+            // MARK: - Modern Extended Hero Header Card
+            Section {
+                VStack(spacing: 14) {
+                    HStack(spacing: 16) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                                .fill(theme.accent.opacity(0.18))
+                                .frame(width: 68, height: 68)
+                            
+                            if let img = appInfo.iconIsDarkIcon(darkModeIcon) {
+                                Image(uiImage: img)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 68, height: 68)
+                                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                    .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
+                            } else {
+                                Text(String(model.displayName.prefix(1)))
+                                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                                    .foregroundStyle(theme.accent)
+                            }
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(model.displayName)
+                                .font(.system(size: 19, weight: .bold, design: .rounded))
+                                .lineLimit(1)
+                            
+                            Text(appInfo.relativeBundlePath)
+                                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                            
+                            HStack(spacing: 6) {
+                                if model.uiIsShared {
+                                    Text("Shared")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundStyle(theme.accent)
+                                        .padding(.horizontal, 6)
+                                        .padding(.vertical, 2)
+                                        .background(theme.accent.opacity(0.15), in: Capsule())
+                                }
+                                if model.uiIsLocked {
+                                    Image(systemName: "lock.fill")
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(.orange)
+                                }
+                                if model.uiIsHidden {
+                                    Image(systemName: "eye.slash.fill")
+                                        .font(.system(size: 10))
+                                        .foregroundStyle(.red)
+                                }
+                            }
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    
+                    // Quick Action Buttons
+                    HStack(spacing: 10) {
+                        Button {
+                            Task { try? await model.runApp() }
+                        } label: {
+                            Label("Run", systemImage: "play.fill")
+                                .font(.system(size: 13, weight: .semibold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 9)
+                                .background(theme.accent)
+                                .foregroundStyle(.white)
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                        
+                        Button {
+                            Task { try? await model.runApp(multitask: true) }
+                        } label: {
+                            Label("Multitask", systemImage: "rectangle.on.rectangle")
+                                .font(.system(size: 13, weight: .semibold))
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 9)
+                                .background(Color(UIColor.secondarySystemFill))
+                                .foregroundStyle(.primary)
+                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.vertical, 4)
+                .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
+                .listRowBackground(Color.clear)
+            }
             
             if developerMode.isEnabled {
                 Section {
@@ -145,12 +237,24 @@ struct LCAppSettingsView: View {
             }
             
             Section {
-                List{
-                    ForEach(model.uiContainers.indices, id:\.self) { i in
-                        NavigationLink {
-                            LCContainerView(container: model.uiContainers[i], uiDefaultDataFolder: $model.uiDefaultDataFolder, delegate: self)
-                        } label: {
+                ForEach(model.uiContainers.indices, id: \.self) { i in
+                    NavigationLink {
+                        LCContainerView(container: model.uiContainers[i], uiDefaultDataFolder: $model.uiDefaultDataFolder, delegate: self)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "shippingbox.fill")
+                                .foregroundStyle(theme.accent)
                             Text(model.uiContainers[i].name)
+                                .font(.system(size: 15, weight: .medium))
+                            Spacer()
+                            if model.uiContainers[i].folderName == model.uiDefaultDataFolder {
+                                Text("Default")
+                                    .font(.caption2.weight(.bold))
+                                    .foregroundStyle(theme.accent)
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 3)
+                                    .background(theme.accent.opacity(0.14), in: Capsule())
+                            }
                         }
                     }
                 }
@@ -158,22 +262,29 @@ struct LCAppSettingsView: View {
                     Button {
                         Task{ await createFolder() }
                     } label: {
-                        Text("lc.appSettings.newDataFolder".loc)
+                        Label("lc.appSettings.newDataFolder".loc, systemImage: "folder.badge.plus")
                     }
                     Button {
                         choosingStorage = true
                     } label: {
-                        Text("lc.appSettings.selectExternalStorage".loc)
+                        Label("lc.appSettings.selectExternalStorage".loc, systemImage: "externaldrive")
                     }
                     if(!model.uiIsShared) {
                         Button {
                             selectUnusedContainerSheetShow = true
                         } label: {
-                            Text("lc.container.selectUnused".loc)
+                            Label("lc.container.selectUnused".loc, systemImage: "tray.and.arrow.down")
                         }
                     }
                 }
                 
+                if let defaultContainer = model.uiContainers.first(where: { $0.folderName == model.uiDefaultDataFolder }) ?? model.uiContainers.first {
+                    Button {
+                        exportContainerZip(container: defaultContainer)
+                    } label: {
+                        Label("Export Container Backup (.zip)", systemImage: "square.and.arrow.up")
+                    }
+                }
             } header: {
                 Text("lc.common.container".loc)
             }
@@ -876,6 +987,48 @@ extension LCAppSettingsView : LCContainerViewDelegate {
         return container.containerURL
     }
     
+    func exportContainerZip(container: LCContainer) {
+        let folderURL = container.containerURL
+        guard FileManager.default.fileExists(atPath: folderURL.path) else {
+            errorInfo = "Container folder not found on disk."
+            errorShow = true
+            return
+        }
+        
+        let tempZipURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("\(model.displayName)_\(container.name)_Backup.zip")
+        try? FileManager.default.removeItem(at: tempZipURL)
+        
+        var coordError: NSError?
+        let coordinator = NSFileCoordinator()
+        coordinator.coordinate(readingItemAt: folderURL, options: .forUploading, error: &coordError) { zipURL in
+            do {
+                try FileManager.default.copyItem(at: zipURL, to: tempZipURL)
+                
+                DispatchQueue.main.async {
+                    let activityVC = UIActivityViewController(activityItems: [tempZipURL], applicationActivities: nil)
+                    if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                       let rootVC = windowScene.windows.first?.rootViewController {
+                        if let popover = activityVC.popoverPresentationController {
+                            popover.sourceView = rootVC.view
+                            popover.sourceRect = CGRect(x: rootVC.view.bounds.midX, y: rootVC.view.bounds.midY, width: 0, height: 0)
+                            popover.permittedArrowDirections = []
+                        }
+                        rootVC.present(activityVC, animated: true)
+                    }
+                }
+            } catch {
+                DispatchQueue.main.async {
+                    self.errorInfo = "Failed to export container: \(error.localizedDescription)"
+                    self.errorShow = true
+                }
+            }
+        }
+        if let err = coordError {
+            errorInfo = "Coordinator error: \(err.localizedDescription)"
+            errorShow = true
+        }
+    }
 }
 
 extension LCAppSettingsView : LCSelectContainerViewDelegate {
