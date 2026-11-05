@@ -31,4 +31,4 @@ void saveCachedSymbol(NSString* symbolName, struct mach_header_64* header, uint6
 void* dlopen_nolock(const char *path, int mode);
 void bypass_seg_count_check(void (^block)(void));
 
-static void hook_do_nothing(void) {}
+static inline void hook_do_nothing(void) {}

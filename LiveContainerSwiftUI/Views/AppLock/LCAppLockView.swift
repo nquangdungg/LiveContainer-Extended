@@ -183,10 +183,9 @@ struct LCAppLockView: View {
                         Text(key)
                             .font(.system(size: 30, weight: .medium, design: .rounded))
                         if !sub.isEmpty {
-                            Text(sub)
+                            Text(sub.map { String($0) }.joined(separator: " "))
                                 .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(theme.secondaryText)
-                                .kerning(1.5)
+                                .foregroundColor(theme.secondaryText)
                         }
                     }
                 }
@@ -320,7 +319,7 @@ struct LCAppLockSettingsSection: View {
                         .keyboardType(.numberPad)
                         .textFieldStyle(.roundedBorder)
                         .multilineTextAlignment(.center)
-                        .font(.title2.weight(.bold))
+                        .font(.system(size: 22, weight: .bold))
                         .padding(.horizontal, 48)
                     
                     if !err.isEmpty {

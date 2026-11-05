@@ -6,6 +6,11 @@
 #include "../LCMachOUtils.h"
 #include <dlfcn.h>
 
+@interface NSFileManager (LiveContainerHooksDecl)
+- (nullable NSURL *)hook_containerURLForSecurityApplicationGroupIdentifier:(NSString *)groupIdentifier;
+- (bool)hook_createDirectoryAtPath:(NSString *)path withIntermediateDirectories:(BOOL)createIntermediates attributes:(NSDictionary<NSFileAttributeKey,id> *)attributes error:(NSError *__autoreleasing  _Nullable *)error;
+@end
+
 BOOL isolateAppGroup = NO;
 void* webKitHeader = 0;
 void NSFMGuestHooksInit(void) {
