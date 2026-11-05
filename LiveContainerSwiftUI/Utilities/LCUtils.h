@@ -49,10 +49,6 @@ uint32_t dyld_get_sdk_version(const struct mach_header* mh);
 + (NSData*)bookmarkForURL:(NSURL*) url;
 @end
 
-@interface NSUserDefaults(LiveContainer)
-+ (bool)sideStoreExist;
-@end
-
 @interface LCP12CertHelper : NSObject
 
 - (instancetype)initWithP12Data:(NSData*)p12Data password:(NSString*)password error:(NSError**)error;

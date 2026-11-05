@@ -3,7 +3,6 @@
 //  LiveContainer — decorative status bar; tap-to-exit for guest apps
 //
 #import "LCFakeStatusBarView.h"
-#import <AudioToolbox/AudioToolbox.h>
 
 static BOOL LCExitOnStatusBarTapEnabled(void) {
     Class sharedUtilsClass = NSClassFromString(@"LCSharedUtils");
@@ -137,8 +136,6 @@ static BOOL LCExitOnStatusBarTapEnabled(void) {
     if (!LCExitOnStatusBarTapEnabled()) {
         return;
     }
-    AudioServicesPlaySystemSound(1519); // Peek
-    AudioServicesPlaySystemSound(1520); // Pop
     UIImpactFeedbackGenerator *gen = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleHeavy];
     [gen prepare];
     [gen impactOccurred];

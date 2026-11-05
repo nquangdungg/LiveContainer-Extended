@@ -12,6 +12,7 @@
 #include "Utilities/unarchive.h"
 #include "../MultitaskSupport/AppSceneViewController.h"
 #include "../MultitaskSupport/DecoratedAppSceneViewController.h"
+#include "../MultitaskSupport/LCFakeStatusBarView.h"
 #include "../MultitaskSupport/LCStatusBarManager.h"
 #include "../MultitaskSupport/PiPManager.h"
 #include "../MultitaskSupport/VirtualWindowsHostView.h"

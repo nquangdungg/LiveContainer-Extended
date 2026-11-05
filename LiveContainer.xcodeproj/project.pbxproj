@@ -262,6 +262,8 @@
 				AppSceneViewController.m,
 				DecoratedAppSceneViewController.h,
 				DecoratedAppSceneViewController.m,
+				LCFakeStatusBarView.h,
+				LCFakeStatusBarView.m,
 				LCStatusBarManager.h,
 				LCStatusBarManager.m,
 				MultitaskAppWindow.swift,
@@ -305,6 +307,7 @@
 			isa = PBXFileSystemSynchronizedGroupBuildPhaseMembershipExceptionSet;
 			buildPhase = 17413FB02D9C0BAE00F3F928 /* Headers */;
 			membershipExceptions = (
+				LCFakeStatusBarView.m,
 				LCStatusBarManager.m,
 				VirtualWindowsHostView.m,
 			);
