@@ -186,7 +186,7 @@ struct LCAppLockView: View {
                             Text(sub)
                                 .font(.system(size: 9, weight: .bold))
                                 .foregroundStyle(theme.secondaryText)
-                                .tracking(1.5)
+                                .kerning(1.5)
                         }
                     }
                 }
