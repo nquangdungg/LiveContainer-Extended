@@ -513,7 +513,7 @@ struct LCSourcesView: View {
                                 .multilineTextAlignment(.center)
                                 .foregroundStyle(.secondary)
                                 .padding(.horizontal, 24)
-                            Text("Tap + above to add a source URL")
+                            Text("lc.sources.emptyHint".loc(fallback: "Tap + above to add a source URL"))
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundStyle(theme.accent)
                             Spacer(minLength: 0)

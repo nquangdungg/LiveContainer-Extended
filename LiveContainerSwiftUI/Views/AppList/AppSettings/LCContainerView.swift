@@ -180,7 +180,7 @@ struct LCContainerView : View {
                         Button {
                             exportContainerZip()
                         } label: {
-                            Label("Export Container Backup (.zip)", systemImage: "square.and.arrow.up")
+                            Label("lc.appSettings.exportContainerZip".loc(fallback: "Export Container Backup (.zip)"), systemImage: "square.and.arrow.up")
                         }
                         
                         Button(role:.destructive) {

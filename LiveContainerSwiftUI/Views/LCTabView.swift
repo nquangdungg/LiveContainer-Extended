@@ -72,7 +72,7 @@ struct LCTabView: View {
             VStack {
                 HStack(spacing: 10) {
                     Image(systemName: "hammer.fill")
-                    Text("Developer Mode is on")
+                    Text("lc.settings.developerModeOnBanner".loc(fallback: "Developer Mode is on"))
                         .font(.subheadline.weight(.semibold))
                     Spacer()
                     Button("OK") { developerMode.dismissBanner() }

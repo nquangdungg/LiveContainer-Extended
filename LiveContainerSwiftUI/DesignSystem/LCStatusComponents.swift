@@ -48,7 +48,7 @@ struct LCAppCapabilityIcons: View {
                 Image(systemName: "arrowshape.turn.up.left.fill")
                     .font(.system(size: 10, weight: .bold))
                     .foregroundColor(.orange)
-                    .accessibilityLabel("Shared")
+                    .accessibilityLabel("lc.appSettings.sharedBadge".loc(fallback: "Shared"))
             }
             if appModel.uiIsJITNeeded && !appModel.uiIs32bit {
                 Image(systemName: "bolt.fill")
@@ -66,7 +66,7 @@ struct LCAppCapabilityIcons: View {
                 Image(systemName: "lock.fill")
                     .font(.system(size: 10, weight: .bold))
                     .foregroundColor(.orange)
-                    .accessibilityLabel("Locked")
+                    .accessibilityLabel("lc.appSettings.lockedBadge".loc(fallback: "Locked"))
             }
         }
     }

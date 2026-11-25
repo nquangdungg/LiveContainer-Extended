@@ -127,7 +127,7 @@ struct LCSettingsView: View {
                         }
 
                     } header: {
-                        Text("Signing & Certificate")
+                        Text("lc.settings.signingHeader".loc(fallback: "Signing & Certificate"))
                     } footer: {
                         Text("lc.settings.jitLessDesc".loc)
                     }
@@ -216,11 +216,11 @@ struct LCSettingsView: View {
                     // Accent — live circles
                     VStack(alignment: .leading, spacing: 12) {
                         HStack {
-                            Text("Accent Color")
-                                .font(.system(size: 15, weight: .semibold))
+                            Text("lc.settings.accentColor".loc(fallback: "Accent Color"))
+                                .font(.subheadline.weight(.semibold))
                             Spacer()
-                            Text(theme.accentPreset.rawValue)
-                                .font(.system(size: 14, weight: .semibold))
+                            Text(theme.accentPreset.displayName)
+                                .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(theme.accent)
                                 .id(theme.accentPreset) // force refresh label
                         }
@@ -265,7 +265,7 @@ struct LCSettingsView: View {
                                     } label: {
                                         HStack(spacing: 6) {
                                             Image(systemName: mode.systemImage)
-                                            Text(mode.rawValue)
+                                            Text(mode.displayName)
                                         }
                                         .font(.footnote.weight(.semibold))
                                         .foregroundColor(theme.appLayout == mode ? .white : .primary)
@@ -285,11 +285,11 @@ struct LCSettingsView: View {
                     // Ambient Background Effect
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
-                            Text("Background Effect")
-                                .font(.system(size: 15, weight: .semibold))
+                            Text("lc.settings.backgroundEffect".loc(fallback: "Background Effect"))
+                                .font(.subheadline.weight(.semibold))
                             Spacer()
-                            Text(appearanceEffects.effect.rawValue)
-                                .font(.system(size: 13, weight: .semibold))
+                            Text(appearanceEffects.effect.displayName)
+                                .font(.footnote.weight(.semibold))
                                 .foregroundStyle(theme.accent)
                         }
                         
@@ -303,9 +303,9 @@ struct LCSettingsView: View {
                                     } label: {
                                         HStack(spacing: 6) {
                                             Image(systemName: effect.icon)
-                                                .font(.system(size: 12, weight: .semibold))
-                                            Text(effect.rawValue)
-                                                .font(.system(size: 12, weight: .medium))
+                                                .font(.caption.weight(.semibold))
+                                            Text(effect.displayName)
+                                                .font(.caption.weight(.medium))
                                         }
                                         .foregroundStyle(appearanceEffects.effect == effect ? Color.white : Color.primary)
                                         .padding(.horizontal, 11)
@@ -335,30 +335,30 @@ struct LCSettingsView: View {
                     }
                     Toggle(isOn: $theme.statusBarTapToExit) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("Tap status bar once to exit app")
-                            Text("Tap status bar or top window bar once to exit guest app")
+                            Text("lc.settings.statusBarTapTitle".loc(fallback: "Tap status bar once to exit app"))
+                            Text("lc.settings.statusBarTapSubtitle".loc(fallback: "Tap status bar or top window bar once to exit guest app"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                     }
                 } header: {
-                    Text("Appearance")
+                    Text("lc.settings.appearanceHeader".loc(fallback: "Appearance"))
                 } footer: {
-                    Text("Accent applies instantly. Status bar tap immediately exits active guest app.")
+                    Text("lc.settings.appearanceFooter".loc(fallback: "Accent applies instantly. Status bar tap immediately exits active guest app."))
                 }
                 Section {
                     Toggle(isOn: $theme.springBoardShellEnabled) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("SpringBoard Mode")
-                            Text("Full-screen iOS home screen with dock, 3x3 folders, & widgets")
+                            Text("lc.settings.springBoardMode".loc(fallback: "SpringBoard Mode"))
+                            Text("lc.settings.springBoardModeSubtitle".loc(fallback: "Full-screen iOS home screen with dock, 3x3 folders, & widgets"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                     }
                 } header: {
-                    Text("Home Screen")
+                    Text("lc.settings.homeScreenHeader".loc(fallback: "Home Screen"))
                 } footer: {
-                    Text("Full-screen SpringBoard home with pages, dock, 3x3 folder previews, spotlight search, and app switcher.")
+                    Text("lc.settings.springBoardModeFooter".loc(fallback: "Full-screen SpringBoard home with pages, dock, 3x3 folder previews, spotlight search, and app switcher."))
                 }
                 Section {
                     Toggle(isOn: $frameShortIcon) {
@@ -411,46 +411,46 @@ struct LCSettingsView: View {
                 Section {
                     if developerMode.isEnabled {
                         HStack {
-                            Label("Developer Mode", systemImage: "hammer.fill")
+                            Label("lc.settings.developerMode".loc(fallback: "Developer Mode"), systemImage: "hammer.fill")
                             Spacer()
-                            Text("On")
+                            Text("lc.common.on".loc(fallback: "On"))
                                 .foregroundStyle(theme.accent)
                                 .font(.subheadline.weight(.semibold))
                         }
-                        Button("Turn Off Developer Mode", role: .destructive) {
+                        Button("lc.settings.turnOffDeveloperMode".loc(fallback: "Turn Off Developer Mode"), role: .destructive) {
                             developerMode.disable()
                         }
                     } else {
                         Button {
                             confirmDevMode = true
                         } label: {
-                            Label("Enable Developer Mode", systemImage: "hammer")
+                            Label("lc.settings.enableDeveloperMode".loc(fallback: "Enable Developer Mode"), systemImage: "hammer")
                         }
                     }
                 } header: {
-                    Text("Developer")
+                    Text("lc.settings.developerHeader".loc(fallback: "Developer"))
                 } footer: {
-                    Text("Unlocks custom guest icons, Info.plist editor, and other advanced tools. Enabling requires an app restart.")
+                    Text("lc.settings.developerModeFooter".loc(fallback: "Unlocks custom guest icons, Info.plist editor, and other advanced tools. Enabling requires an app restart."))
                 }
-                .alert("Restart Required", isPresented: $restartAlert) {
-                Button("Restart Now") {
+                .alert("lc.settings.restartRequired".loc(fallback: "Restart Required"), isPresented: $restartAlert) {
+                Button("lc.settings.restartNow".loc(fallback: "Restart Now")) {
                     LCTheme.setSpringBoardShellPending(theme.springBoardShellEnabled)
                     // Hard exit so user relaunches into the new shell mode.
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                         exit(0)
                     }
                 }
-                Button("Later", role: .cancel) {}
+                Button("lc.common.later".loc(fallback: "Later"), role: .cancel) {}
             } message: {
-                Text("SpringBoard Mode changes apply after LiveContainer fully restarts.")
+                Text("lc.settings.springBoardRestartMsg".loc(fallback: "SpringBoard Mode changes apply after LiveContainer fully restarts."))
             }
-            .alert("Enable Developer Mode?", isPresented: $confirmDevMode) {
-                    Button("Cancel", role: .cancel) {}
-                    Button("Enable & Restart", role: .destructive) {
+            .alert("lc.settings.enableDevModeTitle".loc(fallback: "Enable Developer Mode?"), isPresented: $confirmDevMode) {
+                    Button("lc.common.cancel".loc, role: .cancel) {}
+                    Button("lc.settings.enableAndRestart".loc(fallback: "Enable & Restart"), role: .destructive) {
                         developerMode.requestEnableAndRestart()
                     }
                 } message: {
-                    Text("LiveContainer will restart. After relaunch you will see a confirmation that Developer Mode is on.")
+                    Text("lc.settings.enableDevModeMsg".loc(fallback: "LiveContainer will restart. After relaunch you will see a confirmation that Developer Mode is on."))
                 }
 
                 Section {
@@ -477,8 +477,8 @@ struct LCSettingsView: View {
                             Text("Version \(extendedVersionString)")
                                 .font(.system(size: 13, weight: .semibold, design: .rounded))
                                 .foregroundStyle(theme.accent)
-                            Text("An extended implementation of LiveContainer")
-                                .font(.system(size: 12, weight: .medium))
+                            Text("lc.settings.aboutSubtitle".loc(fallback: "An extended implementation of LiveContainer"))
+                                .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                         
@@ -489,14 +489,14 @@ struct LCSettingsView: View {
                         } label: {
                             HStack(spacing: 12) {
                                 Image(systemName: "person.crop.circle.fill")
-                                    .font(.system(size: 28))
+                                    .font(.title2)
                                     .foregroundStyle(theme.accent)
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("Nguyen Quang Dung")
-                                        .font(.system(size: 15, weight: .semibold))
+                                        .font(.subheadline.weight(.semibold))
                                         .foregroundStyle(.primary)
-                                    Text("Lead Developer · Engineering")
-                                        .font(.system(size: 12))
+                                    Text("lc.settings.aboutRole".loc(fallback: "Lead Developer · Engineering"))
+                                        .font(.caption)
                                         .foregroundStyle(.secondary)
                                 }
                                 Spacer()
@@ -508,9 +508,9 @@ struct LCSettingsView: View {
                     }
                     .padding(.vertical, 8)
                 } header: {
-                    Text("About")
+                    Text("lc.settings.aboutHeader".loc(fallback: "About"))
                 } footer: {
-                    Text("Version follows GitHub Releases (SemVer). Tap the lead developer to open GitHub.")
+                    Text("lc.settings.aboutFooter".loc(fallback: "Version follows GitHub Releases (SemVer). Tap the lead developer to open GitHub."))
                 }
                 
                 Section {
@@ -548,7 +548,7 @@ struct LCSettingsView: View {
                         }
                     }
                 } header: {
-                    Text("Original project")
+                    Text("lc.settings.originalProject".loc(fallback: "Original project"))
                 } footer: {
                     Text("Based on LiveContainer — original authors & contributors.\n\n" + "lc.settings.warning".loc)
                 }

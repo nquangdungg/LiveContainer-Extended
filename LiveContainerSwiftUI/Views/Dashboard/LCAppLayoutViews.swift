@@ -50,7 +50,7 @@ struct LCAppsSectionHeader: View {
                             .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(mode.rawValue)
+                    .accessibilityLabel(mode.displayName)
                     .accessibilityAddTraits(theme.appLayout == mode ? .isSelected : [])
                 }
             }
@@ -64,7 +64,7 @@ struct LCAppsSectionHeader: View {
 
             // Sort menu
             Menu {
-                Picker("Sort by", selection: $sortManager.appSortType) {
+                Picker("lc.common.sortBy".loc(fallback: "Sort by"), selection: $sortManager.appSortType) {
                     ForEach(AppSortType.allCases, id: \.self) { sortType in
                         Label(sortType.displayName, systemImage: sortType.systemImage)
                             .tag(sortType)
@@ -73,7 +73,7 @@ struct LCAppsSectionHeader: View {
                 if sortManager.appSortType == .custom {
                     Divider()
                     Button(action: onManageCustomSort) {
-                        Label("Manage custom order", systemImage: "slider.horizontal.3")
+                        Label("lc.appList.manageCustomOrder".loc(fallback: "Manage custom order"), systemImage: "slider.horizontal.3")
                     }
                 }
             } label: {
@@ -89,7 +89,7 @@ struct LCAppsSectionHeader: View {
                     )
                     .contentShape(Rectangle())
             }
-            .accessibilityLabel("Sort")
+            .accessibilityLabel("lc.common.sort".loc(fallback: "Sort"))
             .onChange(of: sortManager.appSortType) { newValue in
                 if newValue == .custom {
                     onManageCustomSort()
@@ -117,7 +117,7 @@ struct LCAppsEmptyState: View {
             LCEmptyStateView(
                 systemImage: "magnifyingglass",
                 title: "lc.search.noResultsTitle".loc(fallback: "No Matching Apps"),
-                message: "lc.search.noResultsSubtitle".loc(fallback: "No installed apps match \"\(searchQuery)\".")
+                message: "lc.search.noResultsSubtitle %@".localizeWithFormat(searchQuery)
             ) {
                 if let onClearSearch {
                     Button(action: onClearSearch) {

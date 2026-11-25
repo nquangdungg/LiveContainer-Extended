@@ -145,17 +145,17 @@ struct LCAppSettingsView: View {
                     NavigationLink {
                         LCAppIconPickerView(appModel: model)
                     } label: {
-                        Label("Custom Icon", systemImage: "app.badge")
+                        Label("lc.appSettings.customIcon".loc(fallback: "Custom Icon"), systemImage: "app.badge")
                     }
                     NavigationLink {
                         LCInfoPlistEditorView(appModel: model)
                     } label: {
-                        Label("Edit Info.plist", systemImage: "doc.badge.gearshape")
+                        Label("lc.appSettings.editInfoPlist".loc(fallback: "Edit Info.plist"), systemImage: "doc.badge.gearshape")
                     }
                 } header: {
-                    Text("Developer Tools")
+                    Text("lc.appSettings.developerTools".loc(fallback: "Developer Tools"))
                 } footer: {
-                    Text("Icon and Info.plist changes apply to this guest app inside LiveContainer. Editing Info.plist can break the app if values are invalid.")
+                    Text("lc.appSettings.developerToolsFooter".loc(fallback: "Icon and Info.plist changes apply to this guest app inside LiveContainer. Editing Info.plist can break the app if values are invalid."))
                 }
             }
 
@@ -165,12 +165,12 @@ struct LCAppSettingsView: View {
                         _ = await LCUtils.askForJIT(appName: model.displayName)
                     }
                 } label: {
-                    Label("Request Enable JIT", systemImage: "bolt.fill")
+                    Label("lc.appSettings.requestJit".loc(fallback: "Request Enable JIT"), systemImage: "bolt.fill")
                 }
             } header: {
                 Text("JIT")
             } footer: {
-                Text("Request JIT activation using the configured JIT enabler.")
+                Text("lc.appSettings.requestJitFooter".loc(fallback: "Request JIT activation using the configured JIT enabler."))
             }
 
 
@@ -247,12 +247,7 @@ struct LCAppSettingsView: View {
                                 .font(.system(size: 15, weight: .medium))
                             Spacer()
                             if model.uiContainers[i].folderName == model.uiDefaultDataFolder {
-                                Text("Default")
-                                    .font(.caption2.weight(.bold))
-                                    .foregroundStyle(theme.accent)
-                                    .padding(.horizontal, 7)
-                                    .padding(.vertical, 3)
-                                    .background(theme.accent.opacity(0.14), in: Capsule())
+                                LCStatusBadge(text: "lc.common.default".loc, tint: theme.accent)
                             }
                         }
                     }
@@ -281,7 +276,7 @@ struct LCAppSettingsView: View {
                     Button {
                         exportContainerZip(container: defaultContainer)
                     } label: {
-                        Label("Export Container Backup (.zip)", systemImage: "square.and.arrow.up")
+                        Label("lc.appSettings.exportContainerZip".loc(fallback: "Export Container Backup (.zip)"), systemImage: "square.and.arrow.up")
                     }
                 }
             } header: {
@@ -313,8 +308,8 @@ struct LCAppSettingsView: View {
                             }
                             .buttonStyle(BorderlessButtonStyle())
                         } else {
-                            Text("No file selected")
-                                .foregroundColor(.gray)
+                            Text("lc.appSettings.noFileSelected".loc(fallback: "No file selected"))
+                                .foregroundColor(.secondary)
                         }
                         Button(action: {
                             // This will trigger the file picker

@@ -27,7 +27,7 @@ struct LCInfoPlistEditorView: View {
                     .padding(8)
             }
             if saved {
-                Text("Saved. Restart the guest app for changes to apply.")
+                Text("lc.dev.savedRestart".loc(fallback: "Saved. Restart the guest app for changes to apply."))
                     .font(.footnote)
                     .foregroundStyle(theme.accent)
                     .padding(8)
@@ -40,7 +40,7 @@ struct LCInfoPlistEditorView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button("Save") { save() }
+                Button("lc.common.save".loc(fallback: "Save")) { save() }
             }
         }
         .onAppear(perform: load)
@@ -111,12 +111,12 @@ struct LCAppIconPickerView: View {
                 .listRowBackground(Color.clear)
             }
             Section {
-                Button("Choose Image…") { picking = true }
-                Button("Reset to Original", role: .destructive) {
+                Button("lc.dev.chooseImage".loc(fallback: "Choose Image…")) { picking = true }
+                Button("lc.dev.resetOriginal".loc(fallback: "Reset to Original"), role: .destructive) {
                     resetIcon()
                 }
             } footer: {
-                Text("Custom icons are stored inside LiveContainer only. They do not change the iOS Home Screen icon.")
+                Text("lc.dev.customIconFooter".loc(fallback: "Custom icons are stored inside LiveContainer only. They do not change the iOS Home Screen icon."))
             }
             if let message {
                 Section {
@@ -124,7 +124,7 @@ struct LCAppIconPickerView: View {
                 }
             }
         }
-        .navigationTitle("App Icon")
+        .navigationTitle("lc.dev.appIcon".loc(fallback: "App Icon"))
         .navigationBarTitleDisplayMode(.inline)
         .betterFileImporter(isPresented: $picking, types: [.image], multiple: false, callback: { urls in
             if let url = urls.first {

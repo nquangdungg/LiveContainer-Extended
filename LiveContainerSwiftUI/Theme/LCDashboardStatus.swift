@@ -35,11 +35,11 @@ struct LCCertificateStatus {
     
     var title: String {
         switch state {
-        case .notImported: return "No Certificate"
-        case .valid: return "Certificate Valid"
-        case .expiringSoon: return "Expiring Soon"
-        case .expired: return "Certificate Expired"
-        case .error: return "Certificate Error"
+        case .notImported:  return "lc.status.cert.none".loc(fallback: "No Certificate")
+        case .valid:        return "lc.status.cert.valid".loc(fallback: "Certificate Valid")
+        case .expiringSoon: return "lc.status.cert.expiringSoon".loc(fallback: "Expiring Soon")
+        case .expired:      return "lc.status.cert.expired".loc(fallback: "Certificate Expired")
+        case .error:        return "lc.status.cert.error".loc(fallback: "Certificate Error")
         }
     }
     
@@ -48,16 +48,16 @@ struct LCCertificateStatus {
         df.dateStyle = .medium
         switch state {
         case .notImported:
-            return "Import a certificate to sign apps"
+            return "lc.status.cert.importHint".loc(fallback: "Import a certificate to sign apps")
         case .valid(let days, let date, let team):
             let t = team.map { " · \($0)" } ?? ""
-            return "\(days) day\(days == 1 ? "" : "s") left · \(df.string(from: date))\(t)"
+            return "lc.status.cert.daysLeft %lld %@".localizeWithFormat(days, df.string(from: date)) + t
         case .expiringSoon(let days, let date, let team):
             let t = team.map { " · \($0)" } ?? ""
-            return "\(days) day\(days == 1 ? "" : "s") left · \(df.string(from: date))\(t)"
+            return "lc.status.cert.daysLeft %lld %@".localizeWithFormat(days, df.string(from: date)) + t
         case .expired(let date, let team):
             let t = team.map { " · \($0)" } ?? ""
-            return "Expired \(df.string(from: date))\(t)"
+            return "lc.status.cert.expiredOn %@".localizeWithFormat(df.string(from: date)) + t
         case .error(let msg):
             return msg
         }
@@ -89,19 +89,19 @@ struct LCLocalDevVPNStatus {
     
     var title: String {
         switch state {
-        case .connected: return "LocalDevVPN Connected"
-        case .disconnected: return "LocalDevVPN Off"
-        case .connecting: return "LocalDevVPN Connecting…"
-        case .unknown: return "LocalDevVPN"
+        case .connected:    return "lc.status.vpn.connected".loc(fallback: "LocalDevVPN Connected")
+        case .disconnected: return "lc.status.vpn.off".loc(fallback: "LocalDevVPN Off")
+        case .connecting:   return "lc.status.vpn.connecting".loc(fallback: "LocalDevVPN Connecting…")
+        case .unknown:      return "LocalDevVPN"
         }
     }
     
     var subtitle: String {
         switch state {
-        case .connected: return "Ready to refresh apps"
-        case .disconnected: return "Turn on to enable Refresh All"
-        case .connecting: return "Establishing tunnel…"
-        case .unknown: return "Unable to detect status"
+        case .connected:    return "lc.status.vpn.readySub".loc(fallback: "Ready to refresh apps")
+        case .disconnected: return "lc.status.vpn.offSub".loc(fallback: "Turn on to enable Refresh All")
+        case .connecting:   return "lc.status.vpn.connectingSub".loc(fallback: "Establishing tunnel…")
+        case .unknown:      return "lc.status.vpn.unknownSub".loc(fallback: "Unable to detect status")
         }
     }
     

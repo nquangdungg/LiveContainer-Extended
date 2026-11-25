@@ -970,7 +970,7 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
             self.installprogressVisible = false
             UINotificationFeedbackGenerator().notificationOccurred(.success)
             let installedName = finalNewApp.displayName() ?? "App"
-            self.showToast("\(installedName) installed")
+            self.showToast("lc.install.installedToast %@".localizeWithFormat(installedName))
         }
     }
     
@@ -1269,7 +1269,7 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
     ) async -> Bool {
         await withCheckedContinuation { cont in
             let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
-            alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in
+            alert.addAction(UIAlertAction(title: "lc.common.cancel".loc, style: .cancel) { _ in
                 cont.resume(returning: false)
             })
             alert.addAction(UIAlertAction(

@@ -18,6 +18,14 @@ enum LCAutoLockTimeout: String, CaseIterable, Identifiable {
     case after5Minutes = "5 Minutes"
     
     var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .immediately:   return "lc.appLock.timeout.immediately".loc(fallback: rawValue)
+        case .after1Minute:  return "lc.appLock.timeout.1min".loc(fallback: rawValue)
+        case .after5Minutes: return "lc.appLock.timeout.5min".loc(fallback: rawValue)
+        }
+    }
     
     var interval: TimeInterval {
         switch self {

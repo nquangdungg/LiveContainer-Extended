@@ -19,6 +19,18 @@ enum LCParticleEffect: String, CaseIterable, Identifiable {
     case matrix = "Digital Rain"
     
     var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .none:         return "lc.effect.none".loc(fallback: rawValue)
+        case .snow:         return "lc.effect.snow".loc(fallback: rawValue)
+        case .rain:         return "lc.effect.rain".loc(fallback: rawValue)
+        case .aurora:       return "lc.effect.aurora".loc(fallback: rawValue)
+        case .starfield:    return "lc.effect.starfield".loc(fallback: rawValue)
+        case .floatingOrbs: return "lc.effect.floatingOrbs".loc(fallback: rawValue)
+        case .matrix:       return "lc.effect.matrix".loc(fallback: rawValue)
+        }
+    }
     
     var icon: String {
         switch self {

@@ -22,6 +22,19 @@ enum LCAccentPreset: String, CaseIterable, Identifiable {
     case red = "Red"
     
     var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .orange: return "lc.accent.orange".loc(fallback: rawValue)
+        case .blue:   return "lc.accent.blue".loc(fallback: rawValue)
+        case .indigo: return "lc.accent.indigo".loc(fallback: rawValue)
+        case .teal:   return "lc.accent.teal".loc(fallback: rawValue)
+        case .green:  return "lc.accent.green".loc(fallback: rawValue)
+        case .pink:   return "lc.accent.pink".loc(fallback: rawValue)
+        case .purple: return "lc.accent.purple".loc(fallback: rawValue)
+        case .red:    return "lc.accent.red".loc(fallback: rawValue)
+        }
+    }
     
     var color: Color {
         switch self {
@@ -46,6 +59,15 @@ enum LCAppLayoutMode: String, CaseIterable, Identifiable {
     case springboard = "SpringBoard"
     
     var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .list:        return "lc.layout.list".loc(fallback: rawValue)
+        case .grid:        return "lc.layout.grid".loc(fallback: rawValue)
+        case .compact:     return "lc.layout.compact".loc(fallback: rawValue)
+        case .springboard: return "lc.layout.springboard".loc(fallback: rawValue)
+        }
+    }
     
     var systemImage: String {
         switch self {

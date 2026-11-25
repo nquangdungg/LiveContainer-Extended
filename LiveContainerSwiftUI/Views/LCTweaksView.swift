@@ -146,7 +146,7 @@ struct LCTweakFolderView : View {
                     Button {
                         Task { await signAllTweaks() }
                     } label: {
-                        Label("sign".loc, systemImage: "signature")
+                        Label("lc.common.sign".loc(fallback: "Sign"), systemImage: "signature")
                     }
                 }
 
@@ -173,7 +173,7 @@ struct LCTweakFolderView : View {
                             Label("lc.tweakView.newFolder".loc, systemImage: "folder.badge.plus")
                         }
                     } label: {
-                        Label("add", systemImage: "plus")
+                        Label("lc.common.add".loc(fallback: "Add"), systemImage: "plus")
                     }
                 } else {
                     ProgressView().progressViewStyle(.circular)

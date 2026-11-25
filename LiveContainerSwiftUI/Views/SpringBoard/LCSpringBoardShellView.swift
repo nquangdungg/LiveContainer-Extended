@@ -161,7 +161,7 @@ struct LCSpringBoardShellView: View {
                         VStack(spacing: 12) {
                             ProgressView()
                                 .scaleEffect(1.2)
-                            Text("Installing IPA…")
+                            Text("lc.install.installingIpa".loc(fallback: "Installing IPA…"))
                                 .font(.subheadline.weight(.semibold))
                                 .foregroundStyle(.white)
                         }
@@ -186,8 +186,8 @@ struct LCSpringBoardShellView: View {
         .betterFileImporter(isPresented: $choosingIPA, types: [.ipa, .tipa], multiple: false, callback: { urls in
             Task { await installIPA(urls[0]) }
         }, onDismiss: { choosingIPA = false })
-        .alert("Error", isPresented: $errorShow) {
-            Button("OK", role: .cancel) {}
+        .alert("lc.common.error".loc, isPresented: $errorShow) {
+            Button("lc.common.ok".loc, role: .cancel) {}
         } message: { Text(errorInfo) }
         .simultaneousGesture(
             LongPressGesture(minimumDuration: 0.5)
@@ -300,7 +300,7 @@ struct LCSpringBoardShellView: View {
                 } label: {
                     HStack(spacing: 4) {
                         Image(systemName: "plus")
-                        Text("Install")
+                        Text("lc.dashboard.install".loc)
                     }
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.white)
@@ -311,7 +311,7 @@ struct LCSpringBoardShellView: View {
                 
                 Spacer()
                 
-                Text("Edit Home")
+                Text("lc.springboard.editHome".loc(fallback: "Edit Home"))
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.75))
                 
@@ -322,7 +322,7 @@ struct LCSpringBoardShellView: View {
                     layout.save()
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 } label: {
-                    Text("Done")
+                    Text("lc.common.done".loc)
                         .font(.system(size: 14, weight: .bold))
                         .foregroundStyle(theme.accent)
                         .padding(.horizontal, 14)
@@ -358,7 +358,7 @@ struct LCSpringBoardShellView: View {
                             .frame(width: LCHitTarget.minimum, height: LCHitTarget.minimum)
                             .contentShape(Rectangle())
                     }
-                    .accessibilityLabel("Search")
+                    .accessibilityLabel("lc.common.search".loc(fallback: "Search"))
                     
                     Button {
                         withAnimation(.spring(response: 0.3)) { showSwitcher = true }
@@ -371,7 +371,7 @@ struct LCSpringBoardShellView: View {
                             .frame(width: LCHitTarget.minimum, height: LCHitTarget.minimum)
                             .contentShape(Rectangle())
                     }
-                    .accessibilityLabel("App Switcher")
+                    .accessibilityLabel("lc.springboard.appSwitcher".loc(fallback: "App Switcher"))
                     
                     Button {
                         showSettings = true
@@ -395,7 +395,7 @@ struct LCSpringBoardShellView: View {
     private func todayWidgetsPage(width: CGFloat) -> some View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 14) {
-                Text("Widgets")
+                Text("lc.springboard.widgets".loc(fallback: "Widgets"))
                     .font(.system(size: 26, weight: .bold, design: .rounded))
                     .foregroundStyle(.white)
                     .padding(.top, 4)
@@ -437,22 +437,24 @@ struct LCSpringBoardShellView: View {
                 
                 // Wallpaper Picker Widget
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Wallpaper Style")
-                        .font(.system(size: 13, weight: .semibold))
+                    Text("lc.springboard.wallpaperStyle".loc(fallback: "Wallpaper Style"))
+                        .font(.footnote.weight(.semibold))
                         .foregroundStyle(.white.opacity(0.75))
                         .padding(.horizontal, 4)
                     
-                    HStack(spacing: 8) {
-                        ForEach(LCWallpaperStyle.allCases) { wp in
-                            Button {
-                                withAnimation { wallpaperStyle = wp }
-                            } label: {
-                                Text(wp.rawValue)
-                                    .font(.system(size: 11, weight: .semibold))
-                                    .foregroundStyle(wallpaperStyle == wp ? Color.white : Color.white.opacity(0.7))
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
-                                    .background(wallpaperStyle == wp ? theme.accent : Color.white.opacity(0.12), in: Capsule())
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(LCWallpaperStyle.allCases) { wp in
+                                Button {
+                                    withAnimation { wallpaperStyle = wp }
+                                } label: {
+                                    Text(wp.rawValue)
+                                        .font(.caption2.weight(.semibold))
+                                        .foregroundStyle(wallpaperStyle == wp ? Color.white : Color.white.opacity(0.7))
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 6)
+                                        .background(wallpaperStyle == wp ? theme.accent : Color.white.opacity(0.12), in: Capsule())
+                                }
                             }
                         }
                     }
@@ -546,13 +548,13 @@ struct LCSpringBoardShellView: View {
             }
             .contextMenu {
                 if !editing {
-                    Button { launch(app) } label: { Label("Open", systemImage: "arrow.up.forward.app") }
+                    Button { launch(app) } label: { Label("lc.common.open".loc(fallback: "Open"), systemImage: "arrow.up.forward.app") }
                     Button {
                         layout.folders.append(LCSpringBoardFolder(name: "Folder", appBundleIds: [key]))
                         layout.pages = layout.pages.map { $0.filter { $0 != key } }
                         layout.dock.removeAll { $0 == key }
                         layout.save()
-                    } label: { Label("New Folder with App", systemImage: "folder.badge.plus") }
+                    } label: { Label("lc.springboard.newFolderWithApp".loc(fallback: "New Folder with App"), systemImage: "folder.badge.plus") }
                 }
             }
             
@@ -814,7 +816,7 @@ struct LCSpringBoardSearchView: View {
                 HStack(spacing: 10) {
                     Image(systemName: "magnifyingglass")
                         .foregroundStyle(.secondary)
-                    TextField("Search Apps & Folders", text: $query)
+                    TextField("lc.common.search".loc(fallback: "Search"), text: $query)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                     if !query.isEmpty {
@@ -822,7 +824,7 @@ struct LCSpringBoardSearchView: View {
                             Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
                         }
                     }
-                    Button("Cancel", action: onDismiss)
+                    Button("lc.common.cancel".loc, action: onDismiss)
                         .font(.subheadline.weight(.semibold))
                 }
                 .padding(12)
@@ -838,13 +840,11 @@ struct LCSpringBoardSearchView: View {
                                 onDismiss()
                             } label: {
                                 HStack(spacing: 12) {
-                                    if let img = app.appInfo.iconIsDarkIcon(false) {
-                                        Image(uiImage: img)
-                                            .resizable()
-                                            .scaledToFill()
-                                            .frame(width: 40, height: 40)
-                                            .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
-                                    }
+                                    LCAppIconView(
+                                        appInfo: app.appInfo,
+                                        displayName: app.displayName,
+                                        size: 40
+                                    )
                                     VStack(alignment: .leading, spacing: 2) {
                                         Text(app.displayName)
                                             .font(.system(size: 16, weight: .semibold))
@@ -887,11 +887,11 @@ struct LCSpringBoardSwitcherView: View {
                     .padding(.top, 12)
                 
                 HStack {
-                    Text("App Switcher")
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                    Text("lc.springboard.appSwitcher".loc(fallback: "App Switcher"))
+                        .font(.title3.bold())
                         .foregroundStyle(.white)
                     Spacer()
-                    Button("Close", action: onDismiss)
+                    Button("lc.common.close".loc(fallback: "Close"), action: onDismiss)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.white.opacity(0.8))
                 }

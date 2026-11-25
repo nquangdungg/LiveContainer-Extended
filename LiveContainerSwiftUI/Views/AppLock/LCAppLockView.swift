@@ -14,8 +14,18 @@ struct LCAppLockView: View {
     
     @State private var digits: String = ""
     @State private var errorShake = false
-    @State private var message: String = "Enter Passcode"
+    @State private var isWrongPasscode = false
     @State private var isSuccess = false
+
+    private var statusMessage: String {
+        if isSuccess {
+            return "lc.appLock.unlocked".loc(fallback: "Unlocked")
+        } else if isWrongPasscode {
+            return "lc.appLock.wrongPasscode".loc(fallback: "Wrong passcode")
+        } else {
+            return "lc.appLock.enterPasscode".loc(fallback: "Enter Passcode")
+        }
+    }
     
     private let keyMatrix: [[(num: String, letters: String)]] = [
         [("1", ""), ("2", "A B C"), ("3", "D E F")],
@@ -64,17 +74,17 @@ struct LCAppLockView: View {
                     if lock.isLockedOut {
                         HStack(spacing: 6) {
                             Image(systemName: "clock.badge.exclamationmark")
-                            Text("Try again in \(lock.lockoutSecondsRemaining)s")
+                            Text("lc.appLock.tryAgainIn %lld".localizeWithFormat(lock.lockoutSecondsRemaining))
                         }
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.footnote.weight(.semibold))
                         .foregroundStyle(theme.danger)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 6)
                         .background(theme.danger.opacity(0.14), in: Capsule())
                     } else {
-                        Text(message)
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundStyle(message == "Wrong passcode" ? theme.danger : theme.secondaryText)
+                        Text(statusMessage)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundStyle(isWrongPasscode ? theme.danger : theme.secondaryText)
                     }
                 }
                 
@@ -203,12 +213,12 @@ struct LCAppLockView: View {
         
         if digits.count == 6 {
             if lock.verifyPasscode(digits) {
+                isWrongPasscode = false
                 isSuccess = true
-                message = "Unlocked"
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
             } else {
                 UINotificationFeedbackGenerator().notificationOccurred(.error)
-                message = "Wrong passcode"
+                isWrongPasscode = true
                 errorShake = true
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
                     errorShake = false
@@ -266,7 +276,7 @@ struct LCAppLockSettingsSection: View {
     
     var body: some View {
         Section {
-            Toggle("Require Passcode", isOn: Binding(
+            Toggle("lc.appLock.requirePasscode".loc(fallback: "Require Passcode"), isOn: Binding(
                 get: { lock.isEnabled && lock.hasPasscode() },
                 set: { on in
                     if on {
@@ -282,16 +292,16 @@ struct LCAppLockSettingsSection: View {
             ))
             
             if lock.isEnabled && lock.hasPasscode() {
-                Toggle("Allow \(lock.biometricsLabel)", isOn: $lock.biometricsAllowed)
+                Toggle("lc.appLock.allowBiometrics %@".localizeWithFormat(lock.biometricsLabel), isOn: $lock.biometricsAllowed)
                     .disabled(!lock.biometricsAvailable)
                 
-                Picker("Auto-Lock", selection: $lock.autoLockTimeout) {
+                Picker("lc.appLock.autoLock".loc(fallback: "Auto-Lock"), selection: $lock.autoLockTimeout) {
                     ForEach(LCAutoLockTimeout.allCases) { timeout in
-                        Text(timeout.rawValue).tag(timeout)
+                        Text(timeout.displayName).tag(timeout)
                     }
                 }
                 
-                Button("Change Passcode") {
+                Button("lc.appLock.changePasscode".loc(fallback: "Change Passcode")) {
                     showSet = true
                     step = 0
                     newCode = ""
@@ -300,9 +310,9 @@ struct LCAppLockSettingsSection: View {
                 }
             }
         } header: {
-            Text("Security & App Lock")
+            Text("lc.appLock.sectionHeader".loc(fallback: "Security & App Lock"))
         } footer: {
-            Text("Passcode is salted and hashed with SHA-256 before storing in the device Keychain. Features brute-force protection and automatic app switcher privacy shield.")
+            Text("lc.appLock.sectionFooter".loc(fallback: "Passcode is salted and hashed with SHA-256 before storing in the device Keychain. Features brute-force protection and automatic app switcher privacy shield."))
         }
         .sheet(isPresented: $showSet) {
             NavigationView {
@@ -312,7 +322,9 @@ struct LCAppLockSettingsSection: View {
                         .foregroundStyle(Color.accentColor)
                         .padding(.top, 20)
                     
-                    Text(step == 0 ? "Enter a new 6-digit passcode" : "Confirm your passcode")
+                    Text(step == 0
+                        ? "lc.appLock.enterNewPasscode".loc(fallback: "Enter a new 6-digit passcode")
+                        : "lc.appLock.confirmPasscode".loc(fallback: "Confirm your passcode"))
                         .font(.headline)
                     
                     SecureField("••••••", text: step == 0 ? $newCode : $confirmCode)
@@ -326,17 +338,17 @@ struct LCAppLockSettingsSection: View {
                         Text(err).foregroundStyle(.red).font(.footnote)
                     }
                     
-                    Button(step == 0 ? "Continue" : "Save Passcode") {
+                    Button(step == 0 ? "lc.common.continue".loc : "lc.appLock.savePasscode".loc(fallback: "Save Passcode")) {
                         if step == 0 {
                             guard newCode.count == 6, newCode.allSatisfy(\.isNumber) else {
-                                err = "Passcode must be 6 numeric digits"
+                                err = "lc.appLock.mustBe6Digits".loc(fallback: "Passcode must be 6 numeric digits")
                                 return
                             }
                             step = 1
                             err = ""
                         } else {
                             guard confirmCode == newCode else {
-                                err = "Passcodes do not match"
+                                err = "lc.appLock.mismatch".loc(fallback: "Passcodes do not match")
                                 return
                             }
                             do {
@@ -352,11 +364,11 @@ struct LCAppLockSettingsSection: View {
                     
                     Spacer()
                 }
-                .navigationTitle("Set Passcode")
+                .navigationTitle("lc.appLock.setPasscodeTitle".loc(fallback: "Set Passcode"))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") { showSet = false }
+                        Button("lc.common.cancel".loc) { showSet = false }
                     }
                 }
             }
