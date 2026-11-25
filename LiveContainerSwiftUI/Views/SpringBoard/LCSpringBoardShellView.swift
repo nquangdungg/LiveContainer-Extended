@@ -88,11 +88,11 @@ struct LCSpringBoardShellView: View {
                     .ignoresSafeArea()
                 
                 VStack(spacing: 0) {
-                    // Top Chrome Bar
+                    // Top Chrome Bar (respects Dynamic Island & Notch safe area cleanly)
                     topBar
-                        .padding(.top, max(0, safe.top > 0 ? safe.top * 0.4 : 12))
-                        .padding(.horizontal, 20)
-                        .frame(height: 48)
+                        .padding(.top, LCSpacing.xs)
+                        .padding(.horizontal, LCSpacing.md)
+                        .frame(minHeight: LCHitTarget.minimum)
                     
                     // Main Paged Content
                     TabView(selection: $pageIndex) {
@@ -345,37 +345,46 @@ struct LCSpringBoardShellView: View {
                 
                 Spacer()
                 
-                // Action Buttons
-                HStack(spacing: 10) {
+                // Action Buttons (HIG-compliant touch targets)
+                HStack(spacing: LCSpacing.xs) {
                     Button {
                         withAnimation(.spring(response: 0.3)) { searching = true }
                     } label: {
                         Image(systemName: "magnifyingglass")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.9))
-                            .frame(width: 32, height: 32)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(.white.opacity(0.92))
+                            .frame(width: 38, height: 38)
                             .background(.ultraThinMaterial, in: Circle())
+                            .frame(width: LCHitTarget.minimum, height: LCHitTarget.minimum)
+                            .contentShape(Rectangle())
                     }
+                    .accessibilityLabel("Search")
                     
                     Button {
                         withAnimation(.spring(response: 0.3)) { showSwitcher = true }
                     } label: {
                         Image(systemName: "square.stack.3d.up.fill")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.9))
-                            .frame(width: 32, height: 32)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(.white.opacity(0.92))
+                            .frame(width: 38, height: 38)
                             .background(.ultraThinMaterial, in: Circle())
+                            .frame(width: LCHitTarget.minimum, height: LCHitTarget.minimum)
+                            .contentShape(Rectangle())
                     }
+                    .accessibilityLabel("App Switcher")
                     
                     Button {
                         showSettings = true
                     } label: {
                         Image(systemName: "gearshape.fill")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.white.opacity(0.9))
-                            .frame(width: 32, height: 32)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(.white.opacity(0.92))
+                            .frame(width: 38, height: 38)
                             .background(.ultraThinMaterial, in: Circle())
+                            .frame(width: LCHitTarget.minimum, height: LCHitTarget.minimum)
+                            .contentShape(Rectangle())
                     }
+                    .accessibilityLabel("lc.tabView.settings".loc)
                 }
             }
         }

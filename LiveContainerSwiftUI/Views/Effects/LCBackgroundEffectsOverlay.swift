@@ -9,24 +9,30 @@ import SwiftUI
 
 struct LCBackgroundEffectsOverlay: View {
     @ObservedObject private var effects = LCAppearanceEffects.shared
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
     
     var body: some View {
         Group {
-            switch effects.effect {
-            case .none:
+            if reduceMotion || scenePhase != .active {
                 EmptyView()
-            case .snow:
-                LCSnowCanvas()
-            case .rain:
-                LCRainCanvas()
-            case .aurora:
-                LCAuroraCanvas()
-            case .starfield:
-                LCStarfieldCanvas()
-            case .floatingOrbs:
-                LCFloatingOrbsCanvas()
-            case .matrix:
-                LCMatrixRainCanvas()
+            } else {
+                switch effects.effect {
+                case .none:
+                    EmptyView()
+                case .snow:
+                    LCSnowCanvas()
+                case .rain:
+                    LCRainCanvas()
+                case .aurora:
+                    LCAuroraCanvas()
+                case .starfield:
+                    LCStarfieldCanvas()
+                case .floatingOrbs:
+                    LCFloatingOrbsCanvas()
+                case .matrix:
+                    LCMatrixRainCanvas()
+                }
             }
         }
         .allowsHitTesting(false)

@@ -69,18 +69,6 @@ struct LCTweakFolderView : View {
 
     var body: some View {
         List {
-            if isRoot {
-                Section {
-                    LCChromeHeader(
-                        title: "Tweaks",
-                        accentWord: "Extended",
-                        secondaryTag: "Fork",
-                        subtitle: "Inject dylibs & frameworks"
-                    )
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-                }
-            }
             Section {
                 ForEach(tweakItems, id:\.self) { tweakItem in
                     HStack {

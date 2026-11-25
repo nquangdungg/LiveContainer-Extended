@@ -47,7 +47,9 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
     // ipa installing stuff
     @State var installprogressVisible = false
     @State var installProgressPercentage : Float = 0.0
+    @State var installStage: LCInstallStage = .idle
     @State var installObserver : NSKeyValueObservation?
+    @State private var toastMessage: String? = nil
     
     @State var installOptions: [AppReplaceOption]
     @StateObject var installReplaceAlert = AlertHelper<AppReplaceOption>()
@@ -88,7 +90,7 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
     @State private var refreshErrorInfo = ""
     @State private var showRefreshSuccess = false
     
-    @ObservedObject var searchContext: SearchContext = SearchContext()
+    @StateObject var searchContext: SearchContext = SearchContext()
     var sortedApps: [LCAppModel] {
         return sharedAppSortManager.sortedApps
     }
@@ -130,8 +132,15 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
     
     @ViewBuilder
     private var appLayoutContent: some View {
+        let isSearching = !searchContext.debouncedQuery.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         if filteredApps.isEmpty {
             LCAppsEmptyState(
+                isSearching: isSearching,
+                searchQuery: searchContext.debouncedQuery,
+                onClearSearch: {
+                    searchContext.query = ""
+                    searchContext.debouncedQuery = ""
+                },
                 onImport: { choosingIPA = true },
                 onInstallURL: { Task { await startInstallFromUrl() } },
                 onOpenSideStore: { LCUtils.openSideStore(delegate: self) }
@@ -145,51 +154,135 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                     }
                 }
             case .grid:
-                LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
+                LazyVGrid(columns: [GridItem(.flexible(), spacing: LCSpacing.sm), GridItem(.flexible(), spacing: LCSpacing.sm)], spacing: LCSpacing.sm) {
                     ForEach(filteredApps, id: \.self) { app in
-                        LCAppGridCell(
-                            appModel: app,
-                            onLaunch: { Task { await launchFromCell(app) } },
-                            onOpenSettings: { openNavigationView(view: AnyView(LCAppSettingsView(model: app))) },
-                            onRemove: { removeApp(app: app) }
-                        )
+                        LCAppGridCell(appModel: app, actions: makeRowActions(for: app))
                     }
                 }
             case .compact:
-                LazyVStack(spacing: 8) {
+                LazyVStack(spacing: LCSpacing.xs) {
                     ForEach(filteredApps, id: \.self) { app in
-                        LCAppCompactRow(
-                            appModel: app,
-                            onLaunch: { Task { await launchFromCell(app) } },
-                            onOpenSettings: { openNavigationView(view: AnyView(LCAppSettingsView(model: app))) },
-                            onRemove: { removeApp(app: app) }
-                        )
+                        LCAppCompactRow(appModel: app, actions: makeRowActions(for: app))
                     }
                 }
             case .springboard:
                 LazyVGrid(
-                    columns: [GridItem(.adaptive(minimum: 76), spacing: 16)],
-                    spacing: 20
+                    columns: [GridItem(.adaptive(minimum: 76), spacing: LCSpacing.md)],
+                    spacing: LCSpacing.lg
                 ) {
                     ForEach(filteredApps, id: \.self) { app in
-                        LCSpringBoardAppCell(
-                            appModel: app,
-                            onLaunch: { Task { await launchFromCell(app) } },
-                            onOpenSettings: { openNavigationView(view: AnyView(LCAppSettingsView(model: app))) },
-                            onRemove: { removeApp(app: app) }
-                        )
+                        LCSpringBoardAppCell(appModel: app, actions: makeRowActions(for: app))
                     }
                 }
-                .padding(.top, 8)
+                .padding(.top, LCSpacing.xs)
             }
         }
     }
-    
-    private func launchFromCell(_ app: LCAppModel) async {
+
+    private func makeRowActions(for app: LCAppModel) -> LCAppRowActionCallbacks {
+        LCAppRowActionCallbacks(
+            onRun: { multitask in
+                Task { await launchFromCell(app, multitask: multitask) }
+            },
+            onOpenSettings: {
+                openNavigationView(view: AnyView(LCAppSettingsView(model: app)))
+            },
+            onUninstall: {
+                Task { @MainActor in await uninstallAppFully(app) }
+            },
+            onCopyLaunchURL: {
+                showToast("lc.common.copied".loc(fallback: "Launch URL copied"))
+            },
+            onSaveAppIcon: {
+                Task { await saveIconFromCell(app) }
+            },
+            onCreateAppClip: {
+                Task { await createAppClipFromCell(app) }
+            }
+        )
+    }
+
+    private func showToast(_ message: String) {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            toastMessage = message
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.4) {
+            if toastMessage == message {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    toastMessage = nil
+                }
+            }
+        }
+    }
+
+    private func launchFromCell(_ app: LCAppModel, multitask: Bool? = nil) async {
+        if app.appInfo.isLocked && !sharedModel.isHiddenAppUnlocked {
+            do {
+                if !(try await LCUtils.authenticateUser()) {
+                    return
+                }
+            } catch {
+                errorInfo = error.localizedDescription
+                errorShow = true
+                return
+            }
+        }
         do {
-            try await app.runApp()
+            try await app.runApp(multitask: multitask)
         } catch {
-            errorInfo = "\(error)"
+            errorInfo = error.localizedDescription
+            errorShow = true
+        }
+    }
+
+    private func createAppClipFromCell(_ app: LCAppModel) async {
+        guard let style = await promptForGeneratedIconStyle() else { return }
+        do {
+            guard let profile = app.appInfo.generateWebClipConfig(
+                withContainerId: app.uiSelectedContainer?.folderName,
+                iconStyle: style
+            ) else {
+                throw CocoaError(.propertyListWriteInvalid)
+            }
+            let data = try PropertyListSerialization.data(fromPropertyList: profile, format: .xml, options: 0)
+            installMdm(data: data)
+        } catch {
+            errorInfo = error.localizedDescription
+            errorShow = true
+        }
+    }
+
+    private func saveIconFromCell(_ app: LCAppModel) async {
+        guard let style = await promptForGeneratedIconStyle() else { return }
+        do {
+            guard let image = app.appInfo.generateLiveContainerWrappedIcon(with: style),
+                  let imageData = image.pngData() else {
+                throw CocoaError(.fileWriteUnknown)
+            }
+            let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
+            let rawName = app.appInfo.displayName() ?? app.displayName
+            let fileURL = tempDir.appendingPathComponent("\(rawName.replacingOccurrences(of: "/", with: "_")) Icon.png")
+            try imageData.write(to: fileURL, options: .atomic)
+
+            await MainActor.run {
+                let activityVC = UIActivityViewController(activityItems: [fileURL], applicationActivities: nil)
+                if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                   let rootVC = windowScene.windows.first(where: { $0.isKeyWindow })?.rootViewController {
+                    var presenter = rootVC
+                    while let presented = presenter.presentedViewController {
+                        presenter = presented
+                    }
+                    if let pop = activityVC.popoverPresentationController {
+                        pop.sourceView = presenter.view
+                        pop.sourceRect = CGRect(x: presenter.view.bounds.midX, y: presenter.view.bounds.midY, width: 0, height: 0)
+                        pop.permittedArrowDirections = []
+                    }
+                    presenter.present(activityVC, animated: true)
+                }
+            }
+        } catch {
+            errorInfo = error.localizedDescription
             errorShow = true
         }
     }
@@ -229,25 +322,35 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                     .padding(.bottom, 4)
                 }
                 
-                if showRefreshSuccess {
-                    HStack(spacing: 10) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundStyle(LCTheme.shared.success)
-                        Text("lc.dashboard.refreshSuccess".loc)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(LCTheme.shared.success)
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
-                    .background(LCTheme.shared.success.opacity(0.12))
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(LCTheme.shared.success.opacity(0.35), lineWidth: 1)
+                if installprogressVisible {
+                    LCInstallProgressBanner(
+                        progress: installProgressPercentage,
+                        stage: installStage == .idle ? .extracting : installStage
                     )
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 4)
+                    .padding(.horizontal, LCSpacing.md)
+                    .padding(.bottom, LCSpacing.xs)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+
+                if showRefreshSuccess {
+                    LCToastBanner(
+                        message: "lc.dashboard.refreshSuccess".loc,
+                        systemImage: "checkmark.circle.fill",
+                        tint: theme.success
+                    )
+                    .padding(.horizontal, LCSpacing.md)
+                    .padding(.bottom, LCSpacing.xs)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+
+                if let toastMessage {
+                    LCToastBanner(
+                        message: toastMessage,
+                        systemImage: "checkmark.circle.fill",
+                        tint: theme.success
+                    )
+                    .padding(.horizontal, LCSpacing.md)
+                    .padding(.bottom, LCSpacing.xs)
                     .transition(.move(edge: .top).combined(with: .opacity))
                 }
                 
@@ -313,30 +416,46 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                     }
 
                     let appCount = sharedModel.isHiddenAppUnlocked ? filteredApps.count + filteredHiddenApps.count : filteredApps.count
-                    Text(appCount > 0 || searchContext.debouncedQuery != "" ? "lc.appList.appCounter %lld".localizeWithFormat(appCount) : (sharedModel.multiLCStatus == 2 ? "lc.appList.convertToSharedToShowInLC2".loc : "lc.appList.installTip".loc))
-                        .padding(.horizontal)
-                        .foregroundStyle(.gray)
-                        .animation(searchContext.isTyping ? nil : .easeInOut, value: appCount)
-                        .onTapGesture(count: 3) {
-                            Task { await authenticateUser() }
-                        }
+                    if appCount > 0 || sharedModel.multiLCStatus == 2 {
+                        Text(appCount > 0 ? "lc.appList.appCounter %lld".localizeWithFormat(appCount) : "lc.appList.convertToSharedToShowInLC2".loc)
+                            .font(.footnote)
+                            .padding(.horizontal)
+                            .foregroundStyle(.secondary)
+                            .animation(searchContext.isTyping ? nil : .easeInOut, value: appCount)
+                            .onTapGesture(count: 3) {
+                                Task { await authenticateUser() }
+                            }
+                    }
                 }.animation(searchContext.isTyping ? nil : .easeInOut, value: LCUtils.appGroupUserDefault.bool(forKey: "LCStrictHiding"))
 
                 if sharedModel.multiLCStatus == 2 {
-                    Text("lc.appList.manageInPrimaryTip".loc).foregroundStyle(.gray).padding()
+                    Text("lc.appList.manageInPrimaryTip".loc).font(.footnote).foregroundStyle(.secondary).padding()
                 }
 
             }
-            .navigationBarProgressBar(show:$installprogressVisible, progress: $installProgressPercentage)
+            .background(LCChromePageBackground())
+            .refreshable {
+                LCDashboardStatusManager.shared.refresh()
+            }
             .coordinateSpace(name: "scroll")
             .onAppear {
                 if !didAppear {
                     onAppear()
                 }
             }
-            
             .navigationTitle("LiveContainer")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        LCDashboardStatusManager.shared.refresh()
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                    }
+                    .accessibilityLabel("lc.dashboard.refreshStatus".loc)
+                }
+            }
 
         }
         .navigationViewStyle(StackNavigationViewStyle())
@@ -656,7 +775,10 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
         let fm = FileManager()
         
         let installProgress = Progress.discreteProgress(totalUnitCount: 100)
-        self.installProgressPercentage = 0.0
+        await MainActor.run {
+            self.installProgressPercentage = 0.0
+            self.installStage = .extracting
+        }
         self.installObserver = installProgress.observe(\.fractionCompleted) { p, v in
             DispatchQueue.main.async {
                 self.installProgressPercentage = Float(p.fractionCompleted)
@@ -760,6 +882,9 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
         }
         
         // patch and sign it
+        await MainActor.run {
+            self.installStage = .signing
+        }
         var signError : String? = nil
         var signSuccess = false
         await withUnsafeContinuation({ c in
@@ -818,6 +943,7 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
         finalNewApp.installationDate = Date.now
         
         DispatchQueue.main.async {
+            self.installStage = .finalizing
             if let appToReplace {
                 let newAppModel = LCAppModel(appInfo: finalNewApp, delegate: self)
                 
@@ -840,7 +966,11 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
                 }
             }
 
+            self.installStage = .completed
             self.installprogressVisible = false
+            UINotificationFeedbackGenerator().notificationOccurred(.success)
+            let installedName = finalNewApp.displayName() ?? "App"
+            self.showToast("\(installedName) installed")
         }
     }
     
@@ -1074,10 +1204,10 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
     }
     
     func removeApp(app: LCAppModel) {
-        // Grid/Compact used to only drop the row from the array — disk stayed.
-        // Route every layout through the same confirmed uninstall path as list banners.
-        Task { @MainActor in
-            await uninstallAppFully(app)
+        // Called by LCAppBannerViewController AFTER it has already confirmed and removed the bundle from disk.
+        DispatchQueue.main.async {
+            sharedModel.apps.removeAll { $0 == app }
+            sharedModel.hiddenApps.removeAll { $0 == app }
         }
     }
     
@@ -1085,9 +1215,9 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
     private func uninstallAppFully(_ app: LCAppModel) async {
         let displayName = app.appInfo.displayName() ?? app.displayName
         let confirm = await presentSimpleConfirm(
-            title: "Uninstall App",
-            message: "Are you sure you want to uninstall \(displayName)?",
-            confirmTitle: "Uninstall",
+            title: "lc.appBanner.confirmUninstallTitle".loc,
+            message: "lc.appBanner.confirmUninstallMsg %@".localizeWithFormat(displayName),
+            confirmTitle: "lc.appBanner.uninstall".loc,
             isDestructive: true
         )
         guard confirm else { return }
@@ -1096,9 +1226,9 @@ struct LCAppListView : View, LCAppBannerDelegate, LCAppModelDelegate {
         let containers = app.appInfo.containers
         if !containers.isEmpty {
             removeData = await presentSimpleConfirm(
-                title: "Delete App Data",
-                message: "Also delete data containers for \(displayName)?",
-                confirmTitle: "Delete",
+                title: "lc.appBanner.deleteDataTitle".loc,
+                message: "lc.appBanner.deleteDataMsg %@".localizeWithFormat(displayName),
+                confirmTitle: "lc.common.delete".loc,
                 isDestructive: true
             )
         }

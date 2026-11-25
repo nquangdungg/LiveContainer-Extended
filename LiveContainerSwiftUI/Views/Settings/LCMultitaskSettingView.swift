@@ -63,27 +63,31 @@ struct LCMultitaskSettingView: View {
                     }
 
                 }
+            } header: {
+                Text("lc.settings.multitask.windowHeader".loc(fallback: "Window Behavior"))
             }
             
             Section {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: LCSpacing.sm) {
                     HStack {
                         Text("lc.settings.dockWidth".loc)
                             .foregroundColor(.primary)
                         Spacer()
-                        Text("\(Int(dockWidth))px")
+                        Text("\(Int(dockWidth)) pt")
                             .foregroundColor(.secondary)
-                            .font(.caption)
+                            .font(.caption.monospacedDigit())
                     }
                     Slider(value: $dockWidth, in: 20...120) {
                         Text("lc.settings.dockWidth".loc)
                     }
-                    .tint(.accentColor)
+                    .tint(LCTheme.shared.accent)
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, LCSpacing.xxs)
                 Toggle(isOn: $hideCollapsedDock) {
                     Text("lc.settings.hideCollapsedDock".loc)
                 }
+            } header: {
+                Text("lc.settings.multitask.dockHeader".loc(fallback: "Dock"))
             }
         }
         .navigationTitle("lc.appBanner.multitask".loc)

@@ -82,44 +82,75 @@ public final class DownloadHelper : ObservableObject {
 }
 
 struct DownloadAlert : View {
-    @StateObject var helper : DownloadHelper
-    var body: some View {
-        
-        Color.black.opacity(0.2) // Semi-transparent grey background
-            .edgesIgnoringSafeArea(.all) // Covers entire screen
-        
-        VStack {
-            Text("lc.download.downloading".loc)
-                .font(.headline)
-                .padding(.top)
-            
-            ProgressView(value: helper.downloadProgress, total: 1)
-                .padding()
-            
-            Text("\(formatBytes(helper.downloadedSize)) / \(formatBytes(helper.totalSize))")
-                .font(.subheadline)
-                .padding(.bottom)
-            
-            Button(action: cancelDownload) {
-                Text("lc.common.cancel".loc)
-                    .foregroundColor(.red)
-                    .padding(.bottom)
-            }
-        }
-        .frame(width: 300)
-        .background(Color(UIColor.secondarySystemBackground))
-        .cornerRadius(12)
-        .shadow(radius: 10)
-        .padding()
+    @ObservedObject var helper : DownloadHelper
+    @ObservedObject private var theme = LCTheme.shared
+
+    private var hasKnownTotalSize: Bool {
+        helper.totalSize > 0
     }
-    
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.35)
+                .ignoresSafeArea()
+
+            VStack(spacing: LCSpacing.md) {
+                HStack(spacing: LCSpacing.xs) {
+                    Image(systemName: "arrow.down.circle.fill")
+                        .font(.title3)
+                        .foregroundColor(theme.accent)
+                    Text("lc.download.downloading".loc)
+                        .font(.headline)
+                        .foregroundColor(.primary)
+                    Spacer(minLength: 0)
+                    if hasKnownTotalSize {
+                        Text("\(Int(max(0, min(1, helper.downloadProgress)) * 100))%")
+                            .font(.caption.monospacedDigit())
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                if hasKnownTotalSize {
+                    ProgressView(value: Double(max(0, min(1, helper.downloadProgress))), total: 1.0)
+                        .tint(theme.accent)
+                } else {
+                    ProgressView()
+                        .progressViewStyle(.linear)
+                        .tint(theme.accent)
+                }
+
+                Text(hasKnownTotalSize
+                    ? "\(formatBytes(helper.downloadedSize)) / \(formatBytes(helper.totalSize))"
+                    : formatBytes(helper.downloadedSize))
+                    .font(.footnote.monospacedDigit())
+                    .foregroundColor(.secondary)
+
+                Divider()
+
+                Button(role: .destructive, action: cancelDownload) {
+                    Text("lc.common.cancel".loc)
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity, minHeight: LCHitTarget.minimum)
+                }
+            }
+            .padding(LCSpacing.lg)
+            .frame(maxWidth: 340)
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: LCRadius.sheet, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: LCRadius.sheet, style: .continuous)
+                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+            )
+            .padding(.horizontal, LCSpacing.lg)
+        }
+    }
+
     private func formatBytes(_ bytes: Int64) -> String {
         let formatter = ByteCountFormatter()
-        formatter.allowedUnits = [.useKB, .useMB, .useGB] // Allow KB, MB, and GB
+        formatter.allowedUnits = [.useKB, .useMB, .useGB]
         formatter.countStyle = .file
-        return formatter.string(fromByteCount: bytes)
+        return formatter.string(fromByteCount: max(0, bytes))
     }
-    
+
     func cancelDownload() {
         helper.cancel()
     }
@@ -158,7 +189,9 @@ class DownloadDelegate: NSObject, URLSessionDownloadDelegate {
     }
 
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didWriteData bytesWritten: Int64, totalBytesWritten: Int64, totalBytesExpectedToWrite: Int64) {
-        let progress = Float(totalBytesWritten) / Float(totalBytesExpectedToWrite)
+        let progress: Float = totalBytesExpectedToWrite > 0
+            ? min(1.0, max(0.0, Float(totalBytesWritten) / Float(totalBytesExpectedToWrite)))
+            : 0.0
         progressCallback(progress, totalBytesWritten, totalBytesExpectedToWrite)
     }
 

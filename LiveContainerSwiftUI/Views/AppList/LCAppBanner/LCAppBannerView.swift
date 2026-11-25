@@ -42,8 +42,9 @@ final class LCAppBannerRootView: UIView {
     private func setupView() {
         isOpaque = false
         backgroundColor = .clear
-        layer.cornerRadius = 22
+        layer.cornerRadius = LCRadius.card
         layer.cornerCurve = .continuous
+        layer.borderWidth = 0.5
         clipsToBounds = true
 
         visualBackgroundView.translatesAutoresizingMaskIntoConstraints = false
@@ -52,15 +53,17 @@ final class LCAppBannerRootView: UIView {
 
         iconImageView.translatesAutoresizingMaskIntoConstraints = false
         iconImageView.contentMode = .scaleAspectFit
-        iconImageView.layer.cornerRadius = 16
+        iconImageView.layer.cornerRadius = LCRadius.icon(for: 60)
         iconImageView.layer.cornerCurve = .continuous
+        iconImageView.layer.borderWidth = 0.5
+        iconImageView.layer.borderColor = UIColor.label.withAlphaComponent(0.08).cgColor
         iconImageView.clipsToBounds = true
         iconImageView.isAccessibilityElement = false
 
-        configureLabel(nameLabel, font: .systemFont(ofSize: 16, weight: .bold))
-        configureLabel(versionLabel, font: .systemFont(ofSize: 12))
-        configureLabel(remarkLabel, font: .systemFont(ofSize: 10))
-        configureLabel(containerLabel, font: .systemFont(ofSize: 8))
+        configureLabel(nameLabel, font: UIFontMetrics(forTextStyle: .headline).scaledFont(for: .systemFont(ofSize: 16, weight: .semibold)))
+        configureLabel(versionLabel, font: UIFontMetrics(forTextStyle: .caption1).scaledFont(for: .systemFont(ofSize: 12, weight: .regular)))
+        configureLabel(remarkLabel, font: UIFontMetrics(forTextStyle: .caption2).scaledFont(for: .systemFont(ofSize: 11, weight: .regular)))
+        configureLabel(containerLabel, font: UIFontMetrics(forTextStyle: .caption2).scaledFont(for: .systemFont(ofSize: 11, weight: .medium)))
 
         nameLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         nameLabel.setContentHuggingPriority(.required, for: .horizontal)
@@ -134,18 +137,18 @@ final class LCAppBannerRootView: UIView {
         let icon = appInfo.iconIsDarkIcon(darkModeIcon) ?? UIImage()
         let mainColor = Self.extractMainHueColor(appInfo: appInfo, icon: icon, darkModeIcon: darkModeIcon)
         let accentColor = dynamicColors ? mainColor : (UIColor(named: "FontColor") ?? .systemBlue)
-        let textColor = Self.readableTextColor(for: accentColor, traitCollection: traitCollection)
+        let isDark = traitCollection.userInterfaceStyle == .dark
 
         iconImageView.image = icon
         nameLabel.text = model.displayName
         nameLabel.textColor = .label
-        versionLabel.text = "\(model.version) - \(model.bundleIdentifier)"
-        versionLabel.textColor = textColor
+        versionLabel.text = "\(model.version) · \(model.bundleIdentifier)"
+        versionLabel.textColor = .secondaryLabel
         remarkLabel.text = model.uiRemark
-        remarkLabel.textColor = textColor.withAlphaComponent(0.8)
+        remarkLabel.textColor = .secondaryLabel
         remarkLabel.isHidden = model.uiRemark.isEmpty
         containerLabel.text = model.uiSelectedContainer?.name ?? "lc.appBanner.noDataFolder".loc
-        containerLabel.textColor = textColor
+        containerLabel.textColor = .secondaryLabel
 
         sharedBadge.isHidden = !model.uiIsShared
         sharedBadge.backgroundColor = UIColor(named: "BadgeColor") ?? .systemOrange
@@ -156,9 +159,17 @@ final class LCAppBannerRootView: UIView {
         bit32Badge.isHidden = !model.uiIs32bit
         bit32Badge.backgroundColor = UIColor(named: "32BitBadgeColor") ?? .systemBlue
 
+        let baseBg = isDark
+            ? UIColor(red: 0.12, green: 0.13, blue: 0.15, alpha: 1)
+            : UIColor.white
+        backgroundColor = baseBg
         visualBackgroundView.backgroundColor = dynamicColors
-            ? mainColor.withAlphaComponent(0.5)
-            : (UIColor(named: "AppBannerBG") ?? .secondarySystemBackground)
+            ? mainColor.withAlphaComponent(isDark ? 0.18 : 0.11)
+            : .clear
+        layer.borderColor = (dynamicColors
+            ? mainColor.withAlphaComponent(isDark ? 0.28 : 0.20)
+            : (isDark ? UIColor(white: 1, alpha: 0.08) : UIColor(white: 0, alpha: 0.06))
+        ).cgColor
         runControl.update(
             color: accentColor,
             isSigning: model.isSigningInProgress,

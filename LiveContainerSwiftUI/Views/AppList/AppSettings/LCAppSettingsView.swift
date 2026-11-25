@@ -50,93 +50,92 @@ struct LCAppSettingsView: View {
     
     var body: some View {
         Form {
-            // MARK: - Modern Extended Hero Header Card
+            // MARK: - Unified App Hero Card
             Section {
-                VStack(spacing: 14) {
-                    HStack(spacing: 16) {
-                        ZStack {
-                            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                                .fill(theme.accent.opacity(0.18))
-                                .frame(width: 68, height: 68)
-                            
-                            if let img = appInfo.iconIsDarkIcon(darkModeIcon) {
-                                Image(uiImage: img)
-                                    .resizable()
-                                    .scaledToFill()
-                                    .frame(width: 68, height: 68)
-                                    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                                    .shadow(color: .black.opacity(0.2), radius: 6, y: 3)
-                            } else {
-                                Text(String(model.displayName.prefix(1)))
-                                    .font(.system(size: 30, weight: .bold, design: .rounded))
-                                    .foregroundStyle(theme.accent)
-                            }
-                        }
-                        
+                VStack(spacing: LCSpacing.sm) {
+                    HStack(spacing: LCSpacing.md) {
+                        LCAppIconView(
+                            appInfo: appInfo,
+                            displayName: model.displayName,
+                            size: 64,
+                            darkModeIcon: darkModeIcon,
+                            isSigning: model.isSigningInProgress
+                        )
+
                         VStack(alignment: .leading, spacing: 4) {
                             Text(model.displayName)
-                                .font(.system(size: 19, weight: .bold, design: .rounded))
+                                .font(.headline)
                                 .lineLimit(1)
-                            
-                            Text(appInfo.relativeBundlePath)
-                                .font(.system(size: 12, weight: .medium, design: .monospaced))
-                                .foregroundStyle(.secondary)
+
+                            Text("\(model.version) · \(model.bundleIdentifier)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                                 .lineLimit(1)
-                            
+
                             HStack(spacing: 6) {
                                 if model.uiIsShared {
-                                    Text("Shared")
-                                        .font(.system(size: 10, weight: .bold))
-                                        .foregroundStyle(theme.accent)
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(theme.accent.opacity(0.15), in: Capsule())
+                                    LCStatusBadge(
+                                        text: "lc.appSettings.sharedBadge".loc(fallback: "Shared"),
+                                        tint: theme.accent
+                                    )
                                 }
                                 if model.uiIsLocked {
-                                    Image(systemName: "lock.fill")
-                                        .font(.system(size: 10))
-                                        .foregroundStyle(.orange)
+                                    LCStatusBadge(
+                                        text: "lc.appSettings.lockedBadge".loc(fallback: "Locked"),
+                                        systemImage: "lock.fill",
+                                        tint: .orange
+                                    )
                                 }
                                 if model.uiIsHidden {
-                                    Image(systemName: "eye.slash.fill")
-                                        .font(.system(size: 10))
-                                        .foregroundStyle(.red)
+                                    LCStatusBadge(
+                                        text: "lc.appSettings.hiddenBadge".loc(fallback: "Hidden"),
+                                        systemImage: "eye.slash.fill",
+                                        tint: theme.danger
+                                    )
                                 }
                             }
                         }
                         Spacer(minLength: 0)
                     }
-                    
-                    // Quick Action Buttons
-                    HStack(spacing: 10) {
+
+                    // Quick Action Buttons (surface errors properly instead of try?)
+                    HStack(spacing: LCSpacing.xs) {
                         Button {
-                            Task { try? await model.runApp() }
+                            Task {
+                                do {
+                                    try await model.runApp(multitask: false)
+                                } catch {
+                                    errorInfo = error.localizedDescription
+                                    errorShow = true
+                                }
+                            }
                         } label: {
-                            Label("Run", systemImage: "play.fill")
-                                .font(.system(size: 13, weight: .semibold))
+                            Label("lc.appBanner.run".loc, systemImage: "play.fill")
                                 .frame(maxWidth: .infinity)
-                                .padding(.vertical, 9)
-                                .background(theme.accent)
-                                .foregroundStyle(.white)
-                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                         }
-                        .buttonStyle(.plain)
-                        
-                        Button {
-                            Task { try? await model.runApp(multitask: true) }
-                        } label: {
-                            Label("Multitask", systemImage: "rectangle.on.rectangle")
-                                .font(.system(size: 13, weight: .semibold))
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 9)
-                                .background(Color(UIColor.secondarySystemFill))
-                                .foregroundStyle(.primary)
-                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                        .buttonStyle(LCPrimaryButtonStyle(compact: true))
+                        .disabled(model.isAppRunning)
+
+                        if #available(iOS 16.0, *) {
+                            Button {
+                                Task {
+                                    do {
+                                        try await model.runApp(multitask: true)
+                                    } catch {
+                                        errorInfo = error.localizedDescription
+                                        errorShow = true
+                                    }
+                                }
+                            } label: {
+                                Label("lc.appBanner.multitask".loc, systemImage: "macwindow.badge.plus")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(LCSecondaryButtonStyle(compact: true))
+                            .disabled(model.isAppRunning)
                         }
-                        .buttonStyle(.plain)
                     }
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, LCSpacing.xxs)
                 .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
                 .listRowBackground(Color.clear)
             }
@@ -450,11 +449,22 @@ struct LCAppSettingsView: View {
                 Toggle(isOn: $model.uiFixFilePickerNew) {
                     Text("lc.appSettings.fixFilePickerNew".loc)
                 }
+                Toggle(isOn: $model.uiDoSymlinkInbox) {
+                    Text("lc.appSettings.fixFilePicker".loc)
+                }
                 Toggle(isOn: $model.uiFixLocalNotification) {
                     Text("lc.appSettings.fixLocalNotification".loc)
                 }
                 Toggle(isOn: $model.uiUseLCBundleId) {
                     Text("lc.appSettings.useLCBundleId".loc)
+                }
+                Toggle(isOn: $model.uiSpoofSDKVersion) {
+                    Text("lc.appSettings.spoofSDKVersion".loc)
+                }
+                if #available(iOS 16.0, *) {
+                    Toggle(isOn: $model.uiClassicMode) {
+                        Text("lc.appSettings.classicMode".loc)
+                    }
                 }
             } header: {
                 Text("lc.appSettings.fixes".loc)
@@ -493,33 +503,6 @@ struct LCAppSettingsView: View {
                 Text("lc.appSettings.hideLiveContainerDesc".loc)
             }
             
-            if #available(iOS 16.0, *) {
-                Section {
-                    Toggle(isOn: $model.uiClassicMode) {
-                        Text("lc.appSettings.classicMode".loc)
-                    }
-                } footer: {
-                    Text("lc.appSettings.classicModeDesc".loc)
-                }
-            }
-            
-            Section {
-                Toggle(isOn: $model.uiSpoofSDKVersion) {
-                    Text("lc.appSettings.spoofSDKVersion".loc)
-                }
-            } footer: {
-                Text("lc.appSettings.fspoofSDKVersionDesc".loc)
-            }
-
-            
-            Section {
-                Toggle(isOn: $model.uiDoSymlinkInbox) {
-                    Text("lc.appSettings.fixFilePicker".loc)
-                }
-            } footer: {
-                Text("lc.appSettings.fixFilePickerDesc".loc)
-            }
-            
             Section {
                 Button("lc.appSettings.forceSign".loc) {
                     Task { await forceResign() }
@@ -534,16 +517,16 @@ struct LCAppSettingsView: View {
                     Text("lc.appList.sort.lastLaunched".loc)
                     Spacer()
                     Text(formatDate(date: appInfo.lastLaunched))
-                        .foregroundStyle(.gray)
+                        .foregroundStyle(.secondary)
                 }
                 HStack {
                     Text("lc.appList.sort.installationDate".loc)
                     Spacer()
                     Text(formatDate(date: appInfo.installationDate))
-                        .foregroundStyle(.gray)
+                        .foregroundStyle(.secondary)
                 }
             } header: {
-                Text("lc.common.statistics")
+                Text("lc.common.statistics".loc)
             }
 
         }

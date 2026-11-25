@@ -466,6 +466,7 @@ struct LCDataManagementView : View {
     
     func copy(text: String) {
         UIPasteboard.general.string = text
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
     }
     
     func openInFilza(path: URL) {
@@ -476,8 +477,8 @@ struct LCDataManagementView : View {
                     return app.appInfo.bundleIdentifier() == "com.tigisoftware.Filza"
                 })?.runApp(urlStr: launchURLStr)
             } catch {
-                successInfo = error.localizedDescription
-                successShow = true
+                errorInfo = error.localizedDescription
+                errorShow = true
             }
         }
     }

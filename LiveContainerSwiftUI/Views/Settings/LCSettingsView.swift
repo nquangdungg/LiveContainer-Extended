@@ -93,16 +93,6 @@ struct LCSettingsView: View {
     var body: some View {
         NavigationView {
             Form {
-                Section {
-                    LCChromeHeader(
-                        title: "Settings",
-                        accentWord: "Extended",
-                        secondaryTag: "Fork",
-                        subtitle: "v\(extendedVersionString) · Signing · Appearance · Runtime"
-                    )
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-                }
                 if sharedModel.multiLCStatus != 2 {
                     Section{
                         if !certificateDataFound {
@@ -261,31 +251,36 @@ struct LCSettingsView: View {
                     }
                     .padding(.vertical, 4)
                     
-                    // App layout
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("App Layout")
-                            .font(.system(size: 15, weight: .semibold))
-                        HStack(spacing: 8) {
-                            ForEach(LCAppLayoutMode.allCases) { mode in
-                                Button {
-                                    withAnimation { theme.appLayout = mode }
-                                } label: {
-                                    HStack(spacing: 6) {
-                                        Image(systemName: mode.systemImage)
-                                        Text(mode.rawValue)
+                    // App layout (horizontally scrollable for narrow iPhone SE / Dynamic Type)
+                    VStack(alignment: .leading, spacing: LCSpacing.xs) {
+                        Text("lc.settings.appLayout".loc(fallback: "App Layout"))
+                            .font(.subheadline.weight(.semibold))
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: LCSpacing.xs) {
+                                ForEach(LCAppLayoutMode.allCases) { mode in
+                                    Button {
+                                        withAnimation(.easeInOut(duration: 0.18)) {
+                                            theme.appLayout = mode
+                                        }
+                                    } label: {
+                                        HStack(spacing: 6) {
+                                            Image(systemName: mode.systemImage)
+                                            Text(mode.rawValue)
+                                        }
+                                        .font(.footnote.weight(.semibold))
+                                        .foregroundColor(theme.appLayout == mode ? .white : .primary)
+                                        .padding(.horizontal, LCSpacing.sm)
+                                        .frame(minHeight: 36)
+                                        .background(theme.appLayout == mode ? theme.accent : Color(UIColor.secondarySystemFill))
+                                        .clipShape(RoundedRectangle(cornerRadius: LCRadius.control, style: .continuous))
                                     }
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundStyle(theme.appLayout == mode ? Color.white : Color.primary)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
-                                    .background(theme.appLayout == mode ? theme.accent : Color(UIColor.secondarySystemFill))
-                                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                    .buttonStyle(.plain)
                                 }
-                                .buttonStyle(.plain)
                             }
+                            .padding(.vertical, 2)
                         }
                     }
-                    .padding(.vertical, 4)
+                    .padding(.vertical, LCSpacing.xxs)
 
                     // Ambient Background Effect
                     VStack(alignment: .leading, spacing: 8) {
@@ -365,56 +360,33 @@ struct LCSettingsView: View {
                 } footer: {
                     Text("Full-screen SpringBoard home with pages, dock, 3x3 folder previews, spotlight search, and app switcher.")
                 }
-                Section{
+                Section {
                     Toggle(isOn: $frameShortIcon) {
                         Text("lc.settings.FrameIcon".loc)
                     }
-                } header: {
-                    Text("lc.common.miscellaneous".loc)
-                } footer: {
-                    Text("lc.settings.FrameIconDesc".loc)
-                }
-                
-                Section {
                     Toggle(isOn: $silentSwitchApp) {
                         Text("lc.settings.silentSwitchApp".loc)
                     }
-                } footer: {
-                    Text("lc.settings.silentSwitchAppDesc".loc)
-                }
-                
-                Section {
                     Toggle(isOn: $silentOpenWebPage) {
                         Text("lc.settings.silentOpenWebPage".loc)
                     }
-                } footer: {
-                    Text("lc.settings.silentOpenWebPageDesc".loc)
-                }
-                
-                if sharedModel.isHiddenAppUnlocked {
-                    Section {
+                    if sharedModel.isHiddenAppUnlocked {
                         Toggle(isOn: $strictHiding) {
                             Text("lc.settings.strictHiding".loc)
                         }
-                    } footer: {
-                        Text("lc.settings.strictHidingDesc".loc)
                     }
-                }
-                
-                Section {
                     Toggle(isOn: $dontSignApp) {
                         Text("lc.settings.dontSign".loc)
                     }
-                } footer: {
-                    Text("lc.settings.dontSignDesc".loc)
-                }
-
-                Section {
                     Button {
                         clearNotifications()
                     } label: {
                         Text("lc.settings.clearNotifications".loc)
                     }
+                } header: {
+                    Text("lc.common.miscellaneous".loc)
+                } footer: {
+                    Text("lc.settings.dontSignDesc".loc)
                 }
 
                 Section {
@@ -422,14 +394,16 @@ struct LCSettingsView: View {
                         NavigationLink {
                             LCStorageManagementView()
                         } label: {
-                            Text("lc.settings.storageManagement".loc)
+                            Label("lc.settings.storageManagement".loc, systemImage: "internaldrive")
                         }
                     }
                     NavigationLink {
                         LCDataManagementView()
                     } label: {
-                        Text("lc.settings.dataManagement".loc)
+                        Label("lc.settings.dataManagement".loc, systemImage: "folder.badge.gearshape")
                     }
+                } header: {
+                    Text("lc.common.data".loc)
                 }
                 
                 LCAppLockSettingsSection()
@@ -477,28 +451,6 @@ struct LCSettingsView: View {
                     }
                 } message: {
                     Text("LiveContainer will restart. After relaunch you will see a confirmation that Developer Mode is on.")
-                }
-
-                Section {
-                    Picker(selection: $appearanceEffects.effect) {
-                        ForEach(LCParticleEffect.allCases) { effect in
-                            Text(effect.rawValue).tag(effect)
-                        }
-                    } label: {
-                        Label("Background Effect", systemImage: "sparkles")
-                    }
-                } header: {
-                    Text("Atmosphere")
-                } footer: {
-                    Text("Optional decorative overlay. Snow is available in this release; more effects may be added later.")
-                }
-
-                Section {
-                    Text("Use Multitask windows to keep apps alive while switching. Minimize from the window title bar or PiP to set an app aside without force-closing it, then restore it from the multitask dock.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                } header: {
-                    Text("Temporary Close")
                 }
 
                 Section {
@@ -736,11 +688,9 @@ struct LCSettingsView: View {
                     certificateImportPasswordAlert.show = false
                 }
             )
+            .navigationTitle("lc.tabView.settings".loc)
+            .navigationBarTitleDisplayMode(.large)
         }
-        .lcHideListBackground()
-        .background(LCChromePageBackground())
-        .navigationTitle("")
-        .navigationBarTitleDisplayMode(.inline)
         .navigationViewStyle(StackNavigationViewStyle())
         .onAppear() {
             if !isViewAppeared {

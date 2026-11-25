@@ -2,7 +2,7 @@
 //  LCDashboardHeaderView.swift
 //  LiveContainerSwiftUI
 //
-//  LiveContainer Extended — Hero dashboard
+//  LiveContainer Extended — Clean Native Dashboard Header (iOS 15+ safe)
 //
 
 import SwiftUI
@@ -10,58 +10,25 @@ import SwiftUI
 struct LCDashboardHeaderView: View {
     @ObservedObject private var statusManager = LCDashboardStatusManager.shared
     @ObservedObject private var theme = LCTheme.shared
-    
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     var onRefreshAll: () -> Void
     var onOpenSideStore: () -> Void
     var onInstallIPA: () -> Void
     var onInstallURL: () -> Void
     var onOpenSettings: () -> Void
-    
-    /// When true, primary Refresh pill shows a spinner and is non-interactive.
+
+    /// When true, Refresh pill shows a spinner and is non-interactive.
     var isRefreshingApps: Bool = false
-    
+
+    private var canRefreshApps: Bool {
+        statusManager.localDevVPN.isConnected && !isRefreshingApps
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Hero
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .center, spacing: 8) {
-                    Text("LiveContainer")
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
-                    Text("lc.dashboard.badgeExtended".loc)
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
-                        .foregroundStyle(theme.accent)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(theme.accent.opacity(0.14))
-                        .clipShape(Capsule())
-                    Text("lc.dashboard.badgeFork".loc)
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
-                        .foregroundStyle(theme.accentOpposite)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(theme.accentOpposite.opacity(0.14))
-                        .clipShape(Capsule())
-                    Spacer(minLength: 0)
-                    // Status-only refresh (certificate / VPN) — distinct from apps Refresh pill
-                    Button {
-                        statusManager.refresh()
-                    } label: {
-                        Image(systemName: "gauge.with.dots.needle.67percent")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(theme.secondaryText)
-                            .frame(width: 34, height: 34)
-                            .background(theme.cardBackground)
-                            .clipShape(Circle())
-                            .overlay(Circle().stroke(theme.cardBorder, lineWidth: 1))
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("lc.dashboard.refreshStatus".loc)
-                    .accessibilityHint("lc.dashboard.refreshStatusHint".loc)
-                }
-            }
-            
-            // Status
-            HStack(spacing: 12) {
+        VStack(alignment: .leading, spacing: LCSpacing.sm) {
+            // Status Row: Certificate & LocalDevVPN
+            HStack(spacing: LCSpacing.sm) {
                 statusCard(
                     title: "lc.dashboard.certificate".loc,
                     subtitle: statusManager.certificate.subtitle,
@@ -81,25 +48,58 @@ struct LCDashboardHeaderView: View {
                     action: {
                         if !statusManager.localDevVPN.isConnected {
                             statusManager.openLocalDevVPN()
+                        } else {
+                            statusManager.refresh()
                         }
                     }
                 )
             }
-            
-            // Actions: Refresh Apps · SideStore · Install (menu)
-            // Rule: Refresh Apps requires VPN connected
-            HStack(spacing: 10) {
+
+            // Action Bar: Smart primary hierarchy
+            // When VPN is connected -> Refresh Apps is primary; otherwise Install is primary
+            HStack(spacing: LCSpacing.xs) {
+                Menu {
+                    Button(action: onInstallIPA) {
+                        Label("lc.dashboard.installFromFiles".loc, systemImage: "doc.badge.plus")
+                    }
+                    Button(action: onInstallURL) {
+                        Label("lc.dashboard.installFromURL".loc, systemImage: "link")
+                    }
+                } label: {
+                    let installIsPrimary = !canRefreshApps && !isRefreshingApps
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus")
+                            .font(.footnote.weight(.bold))
+                        Text("lc.dashboard.install".loc)
+                            .font(.footnote.weight(.semibold))
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.85)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: LCHitTarget.minimum)
+                    .padding(.horizontal, LCSpacing.xs)
+                    .foregroundColor(installIsPrimary ? .white : .primary)
+                    .background(
+                        RoundedRectangle(cornerRadius: LCRadius.pill, style: .continuous)
+                            .fill(installIsPrimary ? theme.accent : theme.cardBackground)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: LCRadius.pill, style: .continuous)
+                            .stroke(installIsPrimary ? Color.clear : theme.cardBorder, lineWidth: 1)
+                    )
+                }
+                .accessibilityLabel("lc.dashboard.install".loc)
+
                 actionPill(
                     title: isRefreshingApps
                         ? "lc.dashboard.refreshing".loc
                         : "lc.dashboard.refreshApps".loc,
                     icon: "arrow.triangle.2.circlepath",
-                    filled: true,
-                    enabled: statusManager.localDevVPN.isConnected && !isRefreshingApps,
+                    filled: canRefreshApps || isRefreshingApps,
+                    enabled: canRefreshApps,
                     isBusy: isRefreshingApps,
                     action: onRefreshAll
                 )
-                
+
                 actionPill(
                     title: "lc.dashboard.sidestore".loc,
                     icon: "shippingbox.fill",
@@ -107,79 +107,66 @@ struct LCDashboardHeaderView: View {
                     enabled: true,
                     action: onOpenSideStore
                 )
-                
-                Menu {
-                    Button {
-                        onInstallIPA()
-                    } label: {
-                        Label("lc.dashboard.installFromFiles".loc, systemImage: "doc.badge.plus")
-                    }
-                    Button {
-                        onInstallURL()
-                    } label: {
-                        Label("lc.dashboard.installFromURL".loc, systemImage: "link")
-                    }
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 13, weight: .bold))
-                        Text("lc.dashboard.install".loc)
-                            .font(.system(size: 13, weight: .semibold))
-                            .lineLimit(1)
-                        Image(systemName: "chevron.up.chevron.down")
-                            .font(.system(size: 9, weight: .bold))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 11)
-                    .foregroundStyle(Color.primary)
-                    .background(theme.cardBackground)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(theme.cardBorder, lineWidth: 1)
-                    )
-                }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.top, 4)
-        .padding(.bottom, 6)
+        .padding(.horizontal, LCSpacing.md)
+        .padding(.top, LCSpacing.xxs)
+        .padding(.bottom, LCSpacing.xs)
         .onAppear { statusManager.refresh() }
     }
-    
-    private func statusCard(title: String, subtitle: String, badge: String, color: Color, icon: String, action: @escaping () -> Void) -> some View {
+
+    private func statusCard(
+        title: String,
+        subtitle: String,
+        badge: String,
+        color: Color,
+        icon: String,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
                     Image(systemName: icon)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(color)
-                    Spacer()
+                        .font(.footnote.weight(.semibold))
+                        .foregroundColor(color)
+                    Text(title)
+                        .font(.caption.weight(.medium))
+                        .foregroundColor(theme.secondaryText)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
                     Circle()
                         .fill(color)
-                        .frame(width: 8, height: 8)
+                        .frame(width: 7, height: 7)
                 }
-                Text(title)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(theme.secondaryText)
+
                 Text(badge)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(.primary)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(.primary)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+
                 Text(subtitle)
-                    .font(.system(size: 11))
-                    .foregroundStyle(theme.secondaryText)
+                    .font(.caption2)
+                    .foregroundColor(theme.secondaryText)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, minHeight: 96, alignment: .topLeading)
-            .lcCard(radius: 16)
+            .padding(LCSpacing.sm)
+            .frame(maxWidth: .infinity, minHeight: 88, alignment: .topLeading)
+            .lcCard(radius: LCRadius.card)
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
     }
-    
-    private func actionPill(title: String, icon: String, filled: Bool, enabled: Bool, isBusy: Bool = false, action: @escaping () -> Void) -> some View {
+
+    private func actionPill(
+        title: String,
+        icon: String,
+        filled: Bool,
+        enabled: Bool,
+        isBusy: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
         Button {
             guard enabled else { return }
             action()
@@ -192,29 +179,31 @@ struct LCDashboardHeaderView: View {
                         .tint(filled ? Color.white : theme.accent)
                 } else {
                     Image(systemName: icon)
-                        .font(.system(size: 13, weight: .bold))
+                        .font(.footnote.weight(.semibold))
                 }
                 Text(title)
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.footnote.weight(.semibold))
                     .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 11)
-            .foregroundStyle(filled && (enabled || isBusy) ? Color.white : (enabled ? Color.primary : theme.secondaryText))
-            .background(filled && (enabled || isBusy) ? theme.accent : theme.cardBackground)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .frame(maxWidth: .infinity, minHeight: LCHitTarget.minimum)
+            .padding(.horizontal, LCSpacing.xs)
+            .foregroundColor(filled && (enabled || isBusy) ? Color.white : (enabled ? Color.primary : theme.secondaryText))
+            .background(
+                RoundedRectangle(cornerRadius: LCRadius.pill, style: .continuous)
+                    .fill(filled && (enabled || isBusy) ? theme.accent : theme.cardBackground)
+            )
             .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: LCRadius.pill, style: .continuous)
                     .stroke(filled && (enabled || isBusy) ? Color.clear : theme.cardBorder, lineWidth: 1)
             )
-            .opacity(enabled || isBusy ? 1 : 0.45)
+            .opacity(enabled || isBusy ? 1 : 0.5)
         }
         .buttonStyle(.plain)
         .disabled(!enabled)
         .accessibilityLabel(title)
         .accessibilityHint(filled ? "lc.dashboard.refreshAppsHint".loc : "")
-        .animation(.easeInOut(duration: 0.2), value: enabled)
-        .animation(.easeInOut(duration: 0.2), value: isBusy)
-        .animation(.easeInOut(duration: 0.2), value: theme.accentPreset)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: enabled)
+        .animation(reduceMotion ? nil : .easeInOut(duration: 0.2), value: isBusy)
     }
 }

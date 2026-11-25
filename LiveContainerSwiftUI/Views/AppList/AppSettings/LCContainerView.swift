@@ -51,49 +51,44 @@ struct LCContainerView : View {
             if !(container.storageBookMark != nil && container.resolvedContainerURL == nil) {
                 // Container Hero Card
                 Section {
-                    VStack(spacing: 12) {
-                        HStack(spacing: 14) {
-                            ZStack {
-                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                    .fill(theme.accent.opacity(0.18))
-                                    .frame(width: 58, height: 58)
-                                Image(systemName: "shippingbox.fill")
-                                    .font(.system(size: 28))
-                                    .foregroundStyle(theme.accent)
-                            }
-                            
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(container.name)
-                                    .font(.system(size: 18, weight: .bold, design: .rounded))
-                                    .lineLimit(1)
-                                Text(container.folderName)
-                                    .font(.system(size: 12, design: .monospaced))
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                
-                                HStack(spacing: 6) {
-                                    if container.folderName == uiDefaultDataFolder {
-                                        Text("Active Default")
-                                            .font(.system(size: 10, weight: .bold))
-                                            .foregroundStyle(.white)
-                                            .padding(.horizontal, 7)
-                                            .padding(.vertical, 2)
-                                            .background(theme.accent, in: Capsule())
-                                    }
-                                    if container.isShared {
-                                        Text("Shared App Group")
-                                            .font(.system(size: 10, weight: .semibold))
-                                            .foregroundStyle(theme.secondaryText)
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 2)
-                                            .background(Color(UIColor.secondarySystemFill), in: Capsule())
-                                    }
+                    HStack(spacing: LCSpacing.sm) {
+                        ZStack {
+                            RoundedRectangle(cornerRadius: LCRadius.icon(for: 56), style: .continuous)
+                                .fill(theme.accent.opacity(0.16))
+                                .frame(width: 56, height: 56)
+                            Image(systemName: "shippingbox.fill")
+                                .font(.title2)
+                                .foregroundColor(theme.accent)
+                        }
+
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(container.name)
+                                .font(.headline)
+                                .lineLimit(1)
+                            Text(container.folderName)
+                                .font(.system(.caption, design: .monospaced))
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+
+                            HStack(spacing: 6) {
+                                if container.folderName == uiDefaultDataFolder {
+                                    LCStatusBadge(
+                                        text: "lc.container.activeDefaultBadge".loc(fallback: "Active Default"),
+                                        tint: theme.accent,
+                                        filled: true
+                                    )
+                                }
+                                if container.isShared {
+                                    LCStatusBadge(
+                                        text: "lc.container.sharedBadge".loc(fallback: "Shared App Group"),
+                                        tint: .secondary
+                                    )
                                 }
                             }
-                            Spacer(minLength: 0)
                         }
+                        Spacer(minLength: 0)
                     }
-                    .padding(.vertical, 4)
+                    .padding(.vertical, LCSpacing.xxs)
                     .listRowInsets(EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12))
                     .listRowBackground(Color.clear)
                 }

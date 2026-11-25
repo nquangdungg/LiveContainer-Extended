@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import UIKit
 import Combine
 import Darwin
 
@@ -125,13 +126,17 @@ final class LCDashboardStatusManager: ObservableObject {
     @Published var localDevVPN = LCLocalDevVPNStatus(state: .disconnected)
     
     private var vpnObserver: NSObjectProtocol?
+    private var bgObserver: NSObjectProtocol?
+    private var fgObserver: NSObjectProtocol?
     private var pollTask: Task<Void, Never>?
+    private var isAppActive = true
     
     private let localDevBundle = "com.jkcoxson.LocalDevVPN"
     private let localDevTunnel = "com.jkcoxson.LocalDevVPN.TunnelProv"
     
     private init() {
         refresh()
+        setupLifecycleObservers()
         startPolling()
     }
     
@@ -139,7 +144,39 @@ final class LCDashboardStatusManager: ObservableObject {
         if let vpnObserver {
             NotificationCenter.default.removeObserver(vpnObserver)
         }
+        if let bgObserver {
+            NotificationCenter.default.removeObserver(bgObserver)
+        }
+        if let fgObserver {
+            NotificationCenter.default.removeObserver(fgObserver)
+        }
         pollTask?.cancel()
+    }
+
+    private func setupLifecycleObservers() {
+        bgObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didEnterBackgroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                self?.isAppActive = false
+                self?.pollTask?.cancel()
+                self?.pollTask = nil
+            }
+        }
+        fgObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.willEnterForegroundNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                self.isAppActive = true
+                self.refresh()
+                self.startPollingLoop()
+            }
+        }
     }
     
     func refresh() {
@@ -211,11 +248,18 @@ final class LCDashboardStatusManager: ObservableObject {
         }
         #endif
         
+        startPollingLoop()
+    }
+
+    private func startPollingLoop() {
+        pollTask?.cancel()
         pollTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 2_500_000_000)
+                try? await Task.sleep(nanoseconds: 4_000_000_000)
+                guard !Task.isCancelled else { break }
                 await MainActor.run {
-                    self?.refreshLocalDevVPN()
+                    guard let self, self.isAppActive else { return }
+                    self.refreshLocalDevVPN()
                 }
             }
         }
